@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;

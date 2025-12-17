@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 import com.google.inject.Provides;
 import net.runelite.api.ChatMessageType;
@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @PluginDescriptor(name = "Private Chat Widget", description = "Displays private chat messages in a customizable overlay widget. Disabling the 'Split friends private chat' setting is recommended.", tags = {
-        "private", "chat", "pm", "message", "widget", "overlay" })
+        "private", "chat", "pm", "message", "widget", "overlay", "pms", "split" })
 public class PrivateChatWidgetPlugin extends Plugin {
 
     @Inject

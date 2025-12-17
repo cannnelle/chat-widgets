@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 import net.runelite.client.config.Alpha;
 import net.runelite.client.config.Config;

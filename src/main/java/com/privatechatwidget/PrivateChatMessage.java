@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 public class PrivateChatMessage {
     private final String sender;

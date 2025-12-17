@@ -26,7 +26,7 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'rs.proven'
+group = 'com.privatechatwidget'
 version = '1.0.0'
 
 tasks.withType(JavaCompile).configureEach {
@@ -42,14 +42,14 @@ task run(type: JavaExec) {
 	group = 'application'
 	description = 'Run the RuneLite client with the plugin'
 	classpath = sourceSets.test.runtimeClasspath
-	mainClass = 'rs.proven.PrivateChatWidgetPluginTest'
+	mainClass = 'com.privatechatwidget.PrivateChatWidgetPluginTest'
 	jvmArgs '-ea'
 }
 
 tasks.register('shadowJar', Jar) {
 	dependsOn configurations.testRuntimeClasspath
 	manifest {
-		attributes('Main-Class': 'rs.proven.PrivateChatWidgetPluginTest', 'Multi-Release': true)
+		attributes('Main-Class': 'com.privatechatwidget.PrivateChatWidgetPluginTest', 'Multi-Release': true)
 	}
 
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE

@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 import net.runelite.api.Client;
 import net.runelite.api.IndexedSprite;

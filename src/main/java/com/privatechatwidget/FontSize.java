@@ -1,4 +1,4 @@
-package rs.proven;
+package com.privatechatwidget;
 
 public enum FontSize {
     REGULAR("Regular"),
