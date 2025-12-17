@@ -1,9 +1,23 @@
 .gradle
 build
+bin
+
+# IDE
 .idea/
+.vscode/
+*.iml
 .project
-.settings/
 .classpath
+.settings/
+
+# NetBeans
 nbactions.xml
 nb-configuration.xml
 nbproject/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local
+*.log
