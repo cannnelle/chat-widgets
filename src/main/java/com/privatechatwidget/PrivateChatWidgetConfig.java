@@ -55,7 +55,7 @@ public interface PrivateChatWidgetConfig extends Config {
     }
 
     @Alpha
-    @ConfigItem(keyName = "backgroundColor", name = "Background Color", description = "Background color of the widget", position = 8)
+    @ConfigItem(keyName = "backgroundColor", name = "Background Colour", description = "Background colour of the widget", position = 8)
     default Color backgroundColor() {
         return new Color(0, 0, 0, 0);
     }

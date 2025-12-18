@@ -71,7 +71,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
         int widgetWidth = getPreferredSize() != null && getPreferredSize().width > 0
                 ? getPreferredSize().width
                 : config.widgetWidth();
-        int lineHeight = metrics.getHeight() - 3;
+        int lineHeight = metrics.getHeight() - (config.fontSize() == FontSize.SMALL ? 2 : 3);
         long currentTime = System.currentTimeMillis();
         long fadeOutMs = config.fadeOutDuration() * 1000L;
         Color textColor = config.textColor();
@@ -129,9 +129,22 @@ public class PrivateChatWidgetOverlay extends Overlay {
                 if (segment.iconId >= 0 && modIcons != null && segment.iconId < modIcons.length) {
                     BufferedImage img = getCachedSprite(modIcons, segment.iconId);
                     if (img != null) {
-                        int iconY = y - img.getHeight() + metrics.getDescent() - 4;
-                        graphics.drawImage(img, x + 1, Math.max(iconY, 0), null);
-                        x += img.getWidth() + 2;
+                        boolean isSmallFont = config.fontSize() == FontSize.SMALL;
+                        int iconWidth = img.getWidth();
+                        int iconHeight = img.getHeight();
+
+                        if (isSmallFont) {
+                            iconWidth = (int) (iconWidth * 0.75);
+                            iconHeight = (int) (iconHeight * 0.75);
+                        }
+
+                        int iconY = y - iconHeight + metrics.getDescent() - 4;
+                        if (isSmallFont) {
+                            iconY += 2;
+                        }
+
+                        graphics.drawImage(img, x + 1, Math.max(iconY, 0), iconWidth, iconHeight, null);
+                        x += iconWidth + 2;
                     }
                 } else {
                     if (drawShadow) {
@@ -297,6 +310,9 @@ public class PrivateChatWidgetOverlay extends Overlay {
                 int iconWidth = 13;
                 if (modIcons != null && iconId >= 0 && iconId < modIcons.length && modIcons[iconId] != null) {
                     iconWidth = modIcons[iconId].getWidth() + 1;
+                    if (config.fontSize() == FontSize.SMALL) {
+                        iconWidth = (int) (iconWidth * 0.75);
+                    }
                 }
                 segments.add(new TextSegment("", iconId, iconWidth));
             } catch (NumberFormatException e) {
