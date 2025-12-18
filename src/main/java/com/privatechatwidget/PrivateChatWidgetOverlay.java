@@ -109,6 +109,12 @@ public class PrivateChatWidgetOverlay extends Overlay {
         }
 
         Color bgColor = config.backgroundColor();
+        int padding = bgColor.getAlpha() > 0 ? 3 : 0;
+
+        if (padding > 0) {
+            widgetHeight += padding * 2;
+        }
+
         if (bgColor.getAlpha() > 0) {
             graphics.setColor(bgColor);
             graphics.fillRect(0, 0, widgetWidth, widgetHeight);
@@ -117,14 +123,14 @@ public class PrivateChatWidgetOverlay extends Overlay {
         Shape originalClip = graphics.getClip();
         graphics.setClip(0, 0, widgetWidth, widgetHeight + 4);
 
-        int y = yOffset + metrics.getAscent();
+        int y = yOffset + metrics.getAscent() + padding;
         IndexedSprite[] modIcons = client.getModIcons();
 
         for (RenderLine line : renderLines) {
             if (line.alpha <= 0)
                 continue;
 
-            int x = 0;
+            int x = padding;
             for (TextSegment segment : line.segments) {
                 if (segment.iconId >= 0 && modIcons != null && segment.iconId < modIcons.length) {
                     BufferedImage img = getCachedSprite(modIcons, segment.iconId);
