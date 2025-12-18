@@ -44,25 +44,30 @@ public interface PrivateChatWidgetConfig extends Config {
     }
 
     @Alpha
-    @ConfigItem(keyName = "textColor", name = "Text Color", description = "Color for all text in the widget", position = 5)
+    @ConfigItem(keyName = "textColor", name = "Text Color", description = "Color for all text in the widget", position = 6)
     default Color textColor() {
         return new Color(0, 255, 255);
     }
 
-    @ConfigItem(keyName = "textShadow", name = "Text Shadow", description = "Draw shadow behind text", position = 6)
+    @ConfigItem(keyName = "textShadow", name = "Text Shadow", description = "Draw shadow behind text", position = 7)
     default boolean textShadow() {
         return true;
     }
 
     @Alpha
-    @ConfigItem(keyName = "backgroundColor", name = "Background Color", description = "Background color of the widget", position = 7)
+    @ConfigItem(keyName = "backgroundColor", name = "Background Color", description = "Background color of the widget", position = 8)
     default Color backgroundColor() {
         return new Color(0, 0, 0, 0);
     }
 
-    @ConfigItem(keyName = "fadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", position = 8)
+    @ConfigItem(keyName = "fadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", position = 9)
     @Range(min = 0, max = 300)
     default int fadeOutDuration() {
         return 0;
+    }
+
+    @ConfigItem(keyName = "dynamicHeight", name = "Dynamic Height", description = "When enabled, widget height adjusts to content. When disabled, uses fixed height based on max messages.", position = 10)
+    default boolean dynamicHeight() {
+        return true;
     }
 }

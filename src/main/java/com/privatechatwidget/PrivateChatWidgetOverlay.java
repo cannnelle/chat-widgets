@@ -44,7 +44,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
         this.plugin = plugin;
         this.config = config;
         this.client = client;
-        setPosition(OverlayPosition.BOTTOM_LEFT);
+        setPosition(OverlayPosition.TOP_LEFT);
         setLayer(OverlayLayer.ABOVE_WIDGETS);
         setResizable(true);
         setMovable(true);
@@ -71,19 +71,20 @@ public class PrivateChatWidgetOverlay extends Overlay {
         int widgetWidth = getPreferredSize() != null && getPreferredSize().width > 0
                 ? getPreferredSize().width
                 : config.widgetWidth();
-        int lineHeight = metrics.getHeight() - 2;
+        int lineHeight = metrics.getHeight() - 3;
         long currentTime = System.currentTimeMillis();
         long fadeOutMs = config.fadeOutDuration() * 1000L;
         Color textColor = config.textColor();
         boolean drawShadow = config.textShadow();
+        int maxMessages = config.maxMessages();
 
         List<PrivateChatMessage> visibleMessages = messages.stream()
                 .filter(msg -> fadeOutMs == 0 || (currentTime - msg.getTimestamp()) < fadeOutMs + 2000)
                 .collect(Collectors.toList());
 
-        int maxMessages = config.maxMessages();
         if (visibleMessages.size() > maxMessages) {
-            visibleMessages = visibleMessages.subList(visibleMessages.size() - maxMessages, visibleMessages.size());
+            visibleMessages = new ArrayList<>(
+                    visibleMessages.subList(visibleMessages.size() - maxMessages, visibleMessages.size()));
         }
 
         if (visibleMessages.isEmpty()) {
@@ -95,18 +96,28 @@ public class PrivateChatWidgetOverlay extends Overlay {
             renderLines.addAll(buildRenderLines(msg, metrics, widgetWidth, currentTime, fadeOutMs, config.wrapText()));
         }
 
-        int totalHeight = renderLines.size() * lineHeight;
+        int actualContentHeight = renderLines.size() * lineHeight;
+        int widgetHeight;
+        int yOffset;
+
+        if (config.dynamicHeight()) {
+            widgetHeight = actualContentHeight;
+            yOffset = 0;
+        } else {
+            widgetHeight = maxMessages * lineHeight;
+            yOffset = widgetHeight - actualContentHeight;
+        }
 
         Color bgColor = config.backgroundColor();
         if (bgColor.getAlpha() > 0) {
             graphics.setColor(bgColor);
-            graphics.fillRect(0, 0, widgetWidth, totalHeight);
+            graphics.fillRect(0, 0, widgetWidth, widgetHeight);
         }
 
         Shape originalClip = graphics.getClip();
-        graphics.setClip(0, 0, widgetWidth, totalHeight);
+        graphics.setClip(0, 0, widgetWidth, widgetHeight + 4);
 
-        int y = metrics.getAscent();
+        int y = yOffset + metrics.getAscent();
         IndexedSprite[] modIcons = client.getModIcons();
 
         for (RenderLine line : renderLines) {
@@ -136,7 +147,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
         }
 
         graphics.setClip(originalClip);
-        return new Dimension(widgetWidth, totalHeight);
+        return new Dimension(widgetWidth, widgetHeight);
     }
 
     private BufferedImage getCachedSprite(IndexedSprite[] modIcons, int iconId) {

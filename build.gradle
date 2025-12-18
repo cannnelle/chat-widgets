@@ -44,6 +44,7 @@ task run(type: JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.privatechatwidget.PrivateChatWidgetPluginTest'
 	jvmArgs '-ea'
+	args '--developer-mode'
 }
 
 tasks.register('shadowJar', Jar) {
