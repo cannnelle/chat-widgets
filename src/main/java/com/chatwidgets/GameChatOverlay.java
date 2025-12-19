@@ -2,11 +2,13 @@ package com.chatwidgets;
 
 import net.runelite.api.Client;
 import net.runelite.api.IndexedSprite;
+import net.runelite.api.MenuAction;
 import net.runelite.api.Point;
 import net.runelite.api.Player;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
 import javax.inject.Inject;
@@ -54,13 +56,16 @@ public class GameChatOverlay extends Overlay {
         this.plugin = plugin;
         this.config = config;
         this.client = client;
-        setPosition(OverlayPosition.TOP_LEFT);
-        setLayer(OverlayLayer.ABOVE_WIDGETS);
-        setPriority(1);
+        setPosition(client.isResized() ? OverlayPosition.ABOVE_CHATBOX_RIGHT : OverlayPosition.BOTTOM_LEFT);
+        setLayer(OverlayLayer.UNDER_WIDGETS);
+        setPriority(config.swapStackingOrder() ? 9f : 10f);
         setResizable(true);
         setMovable(true);
         setMinimumSize(150);
+        getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY, "Clear", "Game chat history"));
     }
+
+    private boolean lastMergedState = false;
 
     @Override
     public Dimension render(Graphics2D graphics) {
@@ -68,11 +73,29 @@ public class GameChatOverlay extends Overlay {
             return null;
         }
 
-        List<ChatMessage> gameMessages = plugin.getGameMessages();
+        if (config.swapStackingOrder()) {
+            setPriority(9f);
+        } else {
+            setPriority(10f);
+        }
+
+        boolean isMerged = plugin.isWidgetsMerged();
+        if (isMerged != lastMergedState) {
+            lastMergedState = isMerged;
+            getMenuEntries().clear();
+            if (isMerged) {
+                getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY, "Clear", "Merged chat history"));
+            } else {
+                getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY, "Clear", "Game chat history"));
+            }
+        }
+
+        List<WidgetMessage> gameMessages = plugin.getGameMessages();
         WidgetPosition positionMode = config.gamePosition();
         boolean followPlayer = positionMode != WidgetPosition.DEFAULT;
-        boolean mergePrivate = !followPlayer && config.mergeWithGameWidget() && config.enablePrivateMessages();
-        List<ChatMessage> privateMessages = mergePrivate ? plugin.getPrivateMessages() : new ArrayList<>();
+        boolean mergePrivate = !followPlayer && plugin.isChatboxHidden() && config.mergeWithGameWidget()
+                && config.enableGameMessages() && config.enablePrivateMessages();
+        List<WidgetMessage> privateMessages = mergePrivate ? plugin.getPrivateMessages() : new ArrayList<>();
 
         if (gameMessages.isEmpty() && privateMessages.isEmpty()) {
             return null;
@@ -103,53 +126,22 @@ public class GameChatOverlay extends Overlay {
         boolean useDynamicHeight = followPlayer || config.gameDynamicHeight();
 
         List<RenderLine> renderableLines = new ArrayList<>();
+        boolean swapOrder = config.swapStackingOrder();
 
-        if (mergePrivate && !privateMessages.isEmpty()) {
-            int privateFadeOutDuration = config.privateFadeOutDuration();
-            long privateFadeOutMs = privateFadeOutDuration * 1000L;
-            long privateFadeOutThreshold = privateFadeOutMs + 5000;
-            int privateMaxMessages = config.privateMaxMessages();
-
-            int privateMessageCount = privateMessages.size();
-            int privateStartIndex = Math.max(0, privateMessageCount - privateMaxMessages);
-
-            for (int i = privateStartIndex; i < privateMessageCount; i++) {
-                ChatMessage msg = privateMessages.get(i);
-                if (privateFadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < privateFadeOutThreshold) {
-                    List<RenderLine> msgLines = buildPrivateRenderLines(msg, metrics, widgetWidth, currentTime,
-                            privateFadeOutMs, wrapText, privateTextColor);
-
-                    for (RenderLine msgLine : msgLines) {
-                        if (msgLine.alpha > 0) {
-                            renderableLines.add(msgLine);
-                        }
-                    }
-                }
+        if (swapOrder) {
+            addGameMessages(renderableLines, gameMessages, metrics, widgetWidth, currentTime, wrapText,
+                    retainContextualColours, gameTextColor);
+            if (mergePrivate) {
+                addPrivateMessages(renderableLines, privateMessages, metrics, widgetWidth, currentTime, wrapText,
+                        privateTextColor);
             }
-        }
-
-        if (!gameMessages.isEmpty()) {
-            int gameFadeOutDuration = config.gameFadeOutDuration();
-            long gameFadeOutMs = gameFadeOutDuration * 1000L;
-            long gameFadeOutThreshold = gameFadeOutMs + 5000;
-            int gameMaxMessages = config.gameMaxMessages();
-
-            int gameMessageCount = gameMessages.size();
-            int gameStartIndex = Math.max(0, gameMessageCount - gameMaxMessages);
-
-            for (int i = gameStartIndex; i < gameMessageCount; i++) {
-                ChatMessage msg = gameMessages.get(i);
-                if (gameFadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < gameFadeOutThreshold) {
-                    List<RenderLine> msgLines = buildGameRenderLines(msg, metrics, widgetWidth, currentTime,
-                            gameFadeOutMs, wrapText, retainContextualColours, gameTextColor);
-
-                    for (RenderLine msgLine : msgLines) {
-                        if (msgLine.alpha > 0) {
-                            renderableLines.add(msgLine);
-                        }
-                    }
-                }
+        } else {
+            if (mergePrivate) {
+                addPrivateMessages(renderableLines, privateMessages, metrics, widgetWidth, currentTime, wrapText,
+                        privateTextColor);
             }
+            addGameMessages(renderableLines, gameMessages, metrics, widgetWidth, currentTime, wrapText,
+                    retainContextualColours, gameTextColor);
         }
 
         if (renderableLines.isEmpty()) {
@@ -167,11 +159,12 @@ public class GameChatOverlay extends Overlay {
 
         boolean isPositionDefault = positionMode == WidgetPosition.DEFAULT;
         Color bgColor = config.gameBackgroundColor();
-        int padding = (bgColor.getAlpha() > 0 && isPositionDefault) ? 3 : 0;
+        int bgPadding = (bgColor.getAlpha() > 0 && isPositionDefault) ? 3 : 0;
+        int marginTop = config.gameMarginTop();
+        int marginBottom = config.gameMarginBottom();
 
-        if (padding > 0) {
-            widgetHeight += padding * 2;
-        }
+        int contentHeight = widgetHeight + bgPadding * 2;
+        widgetHeight = contentHeight + marginTop + marginBottom;
 
         if (followPlayer) {
             Player localPlayer = client.getLocalPlayer();
@@ -194,13 +187,13 @@ public class GameChatOverlay extends Overlay {
 
         if (bgColor.getAlpha() > 0 && isPositionDefault) {
             graphics.setColor(bgColor);
-            graphics.fillRect(0, 0, widgetWidth, widgetHeight);
+            graphics.fillRect(0, marginTop, widgetWidth, contentHeight);
         }
 
         Shape originalClip = graphics.getClip();
         graphics.setClip(0, 0, widgetWidth, widgetHeight + 4);
 
-        int y = widgetHeight - padding - metrics.getDescent();
+        int y = widgetHeight - bgPadding - marginBottom - metrics.getDescent();
         IndexedSprite[] modIcons = client.getModIcons();
 
         for (int i = renderableLines.size() - 1; i >= 0; i--) {
@@ -210,7 +203,7 @@ public class GameChatOverlay extends Overlay {
             }
 
             int lineWidth = calculateLineWidth(line.segments, metrics);
-            int x = followPlayer ? padding + (widgetWidth - padding * 2 - lineWidth) / 2 : padding;
+            int x = followPlayer ? bgPadding + (widgetWidth - bgPadding * 2 - lineWidth) / 2 : bgPadding;
 
             for (TextSegment segment : line.segments) {
                 if (segment.iconId >= 0 && modIcons != null && segment.iconId < modIcons.length) {
@@ -354,7 +347,7 @@ public class GameChatOverlay extends Overlay {
         return img;
     }
 
-    private List<RenderLine> buildGameRenderLines(ChatMessage msg, FontMetrics metrics, int widgetWidth,
+    private List<RenderLine> buildGameRenderLines(WidgetMessage msg, FontMetrics metrics, int widgetWidth,
             long currentTime, long fadeOutMs, boolean wrapText, boolean retainContextualColours, Color textColor) {
         List<RenderLine> lines = new ArrayList<>();
         int alpha = calculateAlpha(msg, currentTime, fadeOutMs);
@@ -376,6 +369,10 @@ public class GameChatOverlay extends Overlay {
         String messageText = msg.getMessage();
         if (messageText != null && messageText.length() > MAX_MESSAGE_LENGTH) {
             messageText = messageText.substring(0, MAX_MESSAGE_LENGTH) + "...";
+        }
+
+        if (msg.getCount() > 1 && !config.hideDuplicateCount()) {
+            messageText = messageText + " (" + msg.getCount() + ")";
         }
 
         List<TextSegment> messageSegments = parseTextWithColoursAndIcons(messageText, metrics,
@@ -406,7 +403,7 @@ public class GameChatOverlay extends Overlay {
         return lines;
     }
 
-    private List<RenderLine> buildPrivateRenderLines(ChatMessage msg, FontMetrics metrics, int widgetWidth,
+    private List<RenderLine> buildPrivateRenderLines(WidgetMessage msg, FontMetrics metrics, int widgetWidth,
             long currentTime, long fadeOutMs, boolean wrapText, Color textColor) {
         List<RenderLine> lines = new ArrayList<>();
         int alpha = calculateAlpha(msg, currentTime, fadeOutMs);
@@ -469,6 +466,65 @@ public class GameChatOverlay extends Overlay {
         }
 
         return lines;
+    }
+
+    private void addGameMessages(List<RenderLine> renderableLines, List<WidgetMessage> gameMessages,
+            FontMetrics metrics, int widgetWidth, long currentTime, boolean wrapText,
+            boolean retainContextualColours, Color gameTextColor) {
+        if (gameMessages.isEmpty()) {
+            return;
+        }
+
+        int gameFadeOutDuration = config.gameFadeOutDuration();
+        long gameFadeOutMs = gameFadeOutDuration * 1000L;
+        long gameFadeOutThreshold = gameFadeOutMs + 5000;
+        int gameMaxMessages = config.gameMaxMessages();
+
+        int gameMessageCount = gameMessages.size();
+        int gameStartIndex = Math.max(0, gameMessageCount - gameMaxMessages);
+
+        for (int i = gameStartIndex; i < gameMessageCount; i++) {
+            WidgetMessage msg = gameMessages.get(i);
+            if (gameFadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < gameFadeOutThreshold) {
+                List<RenderLine> msgLines = buildGameRenderLines(msg, metrics, widgetWidth, currentTime,
+                        gameFadeOutMs, wrapText, retainContextualColours, gameTextColor);
+
+                for (RenderLine msgLine : msgLines) {
+                    if (msgLine.alpha > 0) {
+                        renderableLines.add(msgLine);
+                    }
+                }
+            }
+        }
+    }
+
+    private void addPrivateMessages(List<RenderLine> renderableLines, List<WidgetMessage> privateMessages,
+            FontMetrics metrics, int widgetWidth, long currentTime, boolean wrapText, Color privateTextColor) {
+        if (privateMessages.isEmpty()) {
+            return;
+        }
+
+        int privateFadeOutDuration = config.privateFadeOutDuration();
+        long privateFadeOutMs = privateFadeOutDuration * 1000L;
+        long privateFadeOutThreshold = privateFadeOutMs + 5000;
+        int privateMaxMessages = config.privateMaxMessages();
+
+        int privateMessageCount = privateMessages.size();
+        int privateStartIndex = Math.max(0, privateMessageCount - privateMaxMessages);
+
+        for (int i = privateStartIndex; i < privateMessageCount; i++) {
+            WidgetMessage msg = privateMessages.get(i);
+            if (privateFadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < privateFadeOutThreshold) {
+                List<RenderLine> msgLines = buildPrivateRenderLines(msg, metrics, widgetWidth, currentTime,
+                        privateFadeOutMs, wrapText, privateTextColor);
+
+                for (RenderLine msgLine : msgLines) {
+                    if (msgLine.alpha > 0) {
+                        renderableLines.add(msgLine);
+                    }
+                }
+            }
+        }
     }
 
     private List<TextSegment> parseTextWithIcons(String text, FontMetrics metrics, IndexedSprite[] modIcons,
@@ -662,7 +718,7 @@ public class GameChatOverlay extends Overlay {
         return lines;
     }
 
-    private int calculateAlpha(ChatMessage msg, long currentTime, long fadeOutMs) {
+    private int calculateAlpha(WidgetMessage msg, long currentTime, long fadeOutMs) {
         if (fadeOutMs <= 0) {
             return 255;
         }

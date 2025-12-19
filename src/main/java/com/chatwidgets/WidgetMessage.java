@@ -2,7 +2,7 @@ package com.chatwidgets;
 
 import net.runelite.api.ChatMessageType;
 
-public class ChatMessage {
+public class WidgetMessage {
     private final String message;
     private final long timestamp;
     private final ChatMessageType type;
@@ -10,18 +10,19 @@ public class ChatMessage {
     private final String sender;
     private final boolean outgoing;
     private final boolean isPrivate;
+    private int count = 1;
 
-    public static ChatMessage gameMessage(String message, long timestamp, ChatMessageType type, boolean bossKc) {
-        return new ChatMessage(message, timestamp, type, bossKc, null, false, false);
+    public static WidgetMessage gameMessage(String message, long timestamp, ChatMessageType type, boolean bossKc) {
+        return new WidgetMessage(message, timestamp, type, bossKc, null, false, false);
     }
 
-    public static ChatMessage privateMessage(String sender, String message, long timestamp, boolean outgoing) {
-        return new ChatMessage(message, timestamp,
+    public static WidgetMessage privateMessage(String sender, String message, long timestamp, boolean outgoing) {
+        return new WidgetMessage(message, timestamp,
                 outgoing ? ChatMessageType.PRIVATECHATOUT : ChatMessageType.PRIVATECHAT,
                 false, sender, outgoing, true);
     }
 
-    private ChatMessage(String message, long timestamp, ChatMessageType type, boolean bossKc,
+    private WidgetMessage(String message, long timestamp, ChatMessageType type, boolean bossKc,
             String sender, boolean outgoing, boolean isPrivate) {
         this.message = message;
         this.timestamp = timestamp;
@@ -58,5 +59,13 @@ public class ChatMessage {
 
     public boolean isPrivate() {
         return isPrivate;
+    }
+
+    public int getCount() {
+        return count;
+    }
+
+    public void incrementCount() {
+        count++;
     }
 }

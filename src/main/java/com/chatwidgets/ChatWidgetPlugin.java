@@ -7,6 +7,8 @@ import net.runelite.api.GameState;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.ResizeableChanged;
+import net.runelite.api.events.VarClientIntChanged;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarClientID;
@@ -18,6 +20,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.OverlayPosition;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
@@ -47,8 +50,8 @@ public class ChatWidgetPlugin extends Plugin {
     @Inject
     private PrivateChatOverlay privateOverlay;
 
-    private final CopyOnWriteArrayList<com.chatwidgets.ChatMessage> gameMessages = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<com.chatwidgets.ChatMessage> privateMessages = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<WidgetMessage> gameMessages = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<WidgetMessage> privateMessages = new CopyOnWriteArrayList<>();
 
     @Override
     protected void startUp() {
@@ -82,6 +85,13 @@ public class ChatWidgetPlugin extends Plugin {
                 showPmWidgets();
             }
         }
+
+        if ("swapStackingOrder".equals(event.getKey())) {
+            overlayManager.remove(gameOverlay);
+            overlayManager.remove(privateOverlay);
+            overlayManager.add(gameOverlay);
+            overlayManager.add(privateOverlay);
+        }
     }
 
     @Subscribe
@@ -102,16 +112,95 @@ public class ChatWidgetPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onVarClientIntChanged(VarClientIntChanged event) {
+        if (event.getIndex() == VarClientID.CHAT_VIEW) {
+            updateSmartPosition(gameOverlay);
+            updateSmartPosition(privateOverlay);
+        }
+    }
+
+    @Subscribe
+    public void onResizeableChanged(ResizeableChanged event) {
+        updateDefaultPosition(gameOverlay);
+        updateDefaultPosition(privateOverlay);
+        updateSmartPosition(gameOverlay);
+        updateSmartPosition(privateOverlay);
+    }
+
+    private void updateDefaultPosition(net.runelite.client.ui.overlay.Overlay overlay) {
+        OverlayPosition defaultPos = client.isResized()
+                ? OverlayPosition.ABOVE_CHATBOX_RIGHT
+                : OverlayPosition.BOTTOM_LEFT;
+        overlay.setPosition(defaultPos);
+    }
+
+    private void updateSmartPosition(net.runelite.client.ui.overlay.Overlay overlay) {
+        if (!config.smartPositioning()) {
+            return;
+        }
+
+        OverlayPosition currentPos = overlay.getPreferredPosition() != null
+                ? overlay.getPreferredPosition()
+                : overlay.getPosition();
+
+        if (isTopPosition(currentPos)) {
+            return;
+        }
+
+        OverlayPosition targetPos;
+
+        if (!client.isResized()) {
+            targetPos = OverlayPosition.BOTTOM_LEFT;
+        } else if (isChatboxHidden()) {
+            targetPos = OverlayPosition.ABOVE_CHATBOX_RIGHT;
+        } else {
+            return;
+        }
+
+        if (currentPos != targetPos) {
+            overlay.setPreferredPosition(targetPos);
+        }
+    }
+
+    private boolean isTopPosition(OverlayPosition position) {
+        return position == OverlayPosition.TOP_CENTER
+                || position == OverlayPosition.TOP_RIGHT
+                || position == OverlayPosition.TOP_LEFT
+                || position == OverlayPosition.CANVAS_TOP_RIGHT;
+    }
+
+    @Subscribe
     public void onMenuOptionClicked(MenuOptionClicked event) {
         String option = event.getMenuOption();
+        String target = event.getMenuTarget();
         if (option == null) {
             return;
         }
 
-        if (option.contains("Game:") && option.contains("Clear history")) {
+        if (option.contains("Game:") && option.contains("Clear")) {
+            clearGameMessages();
+            return;
+        }
+        if (option.contains("Private:") && option.contains("Clear")) {
+            clearPrivateMessages();
+            return;
+        }
+
+        if (option.equals("Clear") && target != null) {
+            if (target.contains("Merged")) {
+                clearGameMessages();
+                clearPrivateMessages();
+            } else if (target.contains("Game")) {
+                clearGameMessages();
+            } else if (target.contains("Private")) {
+                clearPrivateMessages();
+            }
+        }
+
+        if (option.contains("Game:") && option.contains("Clear")) {
             clearGameMessages();
         }
-        if (option.contains("Private:") && option.contains("Clear history")) {
+        if (option.contains("Private:") && option.contains("Clear")) {
             clearPrivateMessages();
         }
     }
@@ -138,13 +227,37 @@ public class ChatWidgetPlugin extends Plugin {
 
         String cleanMessage = message.trim();
         boolean isBossKc = BOSS_KC_PATTERN.matcher(cleanMessage).find();
+        String currentStripped = stripTags(cleanMessage);
+        int existingCount = 0;
 
-        gameMessages.add(com.chatwidgets.ChatMessage.gameMessage(
-                cleanMessage, System.currentTimeMillis(), event.getType(), isBossKc));
+        if (config.collapseGameChat()) {
+            for (int i = gameMessages.size() - 1; i >= 0; i--) {
+                WidgetMessage existing = gameMessages.get(i);
+                if (stripTags(existing.getMessage()).equals(currentStripped)) {
+                    existingCount = existing.getCount();
+                    gameMessages.remove(i);
+                    break;
+                }
+            }
+        }
+
+        WidgetMessage newMsg = WidgetMessage.gameMessage(
+                cleanMessage, System.currentTimeMillis(), event.getType(), isBossKc);
+        for (int i = 0; i < existingCount; i++) {
+            newMsg.incrementCount();
+        }
+        gameMessages.add(newMsg);
 
         while (gameMessages.size() > config.gameMaxMessages() * 2) {
             gameMessages.remove(0);
         }
+    }
+
+    private String stripTags(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replaceAll("<[^>]*>", "");
     }
 
     private void handlePrivateMessage(ChatMessage event) {
@@ -162,7 +275,7 @@ public class ChatWidgetPlugin extends Plugin {
             return;
         }
 
-        privateMessages.add(com.chatwidgets.ChatMessage.privateMessage(
+        privateMessages.add(WidgetMessage.privateMessage(
                 sender, message.trim(), System.currentTimeMillis(), isOutgoing));
 
         while (privateMessages.size() > config.privateMaxMessages() * 2) {
@@ -187,8 +300,17 @@ public class ChatWidgetPlugin extends Plugin {
         return config.enablePrivateMessages();
     }
 
-    private boolean isChatboxHidden() {
+    public boolean isChatboxHidden() {
         return client.getVarcIntValue(VarClientID.CHAT_VIEW) == 1337;
+    }
+
+    public boolean isWidgetsMerged() {
+        return client.isResized()
+                && isChatboxHidden()
+                && config.mergeWithGameWidget()
+                && config.enableGameMessages()
+                && config.enablePrivateMessages()
+                && config.gamePosition() == WidgetPosition.DEFAULT;
     }
 
     public boolean isGameFilterEnabled() {
@@ -199,7 +321,7 @@ public class ChatWidgetPlugin extends Plugin {
         return client.getVarbitValue(VarbitID.BOSS_KILLCOUNT_FILTERED) == 1;
     }
 
-    public List<com.chatwidgets.ChatMessage> getGameMessages() {
+    public List<WidgetMessage> getGameMessages() {
         int size = gameMessages.size();
         if (size == 0) {
             return new ArrayList<>(0);
@@ -211,9 +333,9 @@ public class ChatWidgetPlugin extends Plugin {
         boolean gameFilterEnabled = isGameFilterEnabled();
         boolean bossKcFilterEnabled = isBossKcFilterEnabled();
 
-        List<com.chatwidgets.ChatMessage> filtered = new ArrayList<>(Math.min(size, config.gameMaxMessages()));
+        List<WidgetMessage> filtered = new ArrayList<>(Math.min(size, config.gameMaxMessages()));
         for (int i = 0; i < size; i++) {
-            com.chatwidgets.ChatMessage msg = gameMessages.get(i);
+            WidgetMessage msg = gameMessages.get(i);
 
             if (fadeOutThreshold > 0 && currentTime - msg.getTimestamp() >= fadeOutThreshold) {
                 continue;
@@ -233,7 +355,7 @@ public class ChatWidgetPlugin extends Plugin {
         return filtered;
     }
 
-    public List<com.chatwidgets.ChatMessage> getPrivateMessages() {
+    public List<WidgetMessage> getPrivateMessages() {
         int size = privateMessages.size();
         if (size == 0) {
             return new ArrayList<>(0);
@@ -243,9 +365,9 @@ public class ChatWidgetPlugin extends Plugin {
         int fadeOutDuration = config.privateFadeOutDuration();
         long fadeOutThreshold = fadeOutDuration > 0 ? (fadeOutDuration * 2000L) + 2000 : 0;
 
-        List<com.chatwidgets.ChatMessage> filtered = new ArrayList<>(Math.min(size, config.privateMaxMessages()));
+        List<WidgetMessage> filtered = new ArrayList<>(Math.min(size, config.privateMaxMessages()));
         for (int i = 0; i < size; i++) {
-            com.chatwidgets.ChatMessage msg = privateMessages.get(i);
+            WidgetMessage msg = privateMessages.get(i);
 
             if (fadeOutThreshold > 0 && currentTime - msg.getTimestamp() >= fadeOutThreshold) {
                 continue;

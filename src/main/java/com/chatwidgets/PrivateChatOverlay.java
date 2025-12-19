@@ -2,9 +2,11 @@ package com.chatwidgets;
 
 import net.runelite.api.Client;
 import net.runelite.api.IndexedSprite;
+import net.runelite.api.MenuAction;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
 import javax.inject.Inject;
@@ -43,12 +45,13 @@ public class PrivateChatOverlay extends Overlay {
         this.plugin = plugin;
         this.config = config;
         this.client = client;
-        setPosition(OverlayPosition.TOP_LEFT);
-        setLayer(OverlayLayer.ABOVE_WIDGETS);
-        setPriority(0);
+        setPosition(client.isResized() ? OverlayPosition.ABOVE_CHATBOX_RIGHT : OverlayPosition.BOTTOM_LEFT);
+        setLayer(OverlayLayer.UNDER_WIDGETS);
+        setPriority(config.swapStackingOrder() ? 10f : 9f);
         setResizable(true);
         setMovable(true);
         setMinimumSize(150);
+        getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY, "Clear", "Private chat history"));
     }
 
     @Override
@@ -57,11 +60,18 @@ public class PrivateChatOverlay extends Overlay {
             return null;
         }
 
-        if (config.mergeWithGameWidget() && config.gamePosition() == WidgetPosition.DEFAULT) {
+        if (config.swapStackingOrder()) {
+            setPriority(10f);
+        } else {
+            setPriority(9f);
+        }
+
+        if (client.isResized() && plugin.isChatboxHidden() && config.mergeWithGameWidget()
+                && config.enableGameMessages() && config.gamePosition() == WidgetPosition.DEFAULT) {
             return null;
         }
 
-        List<ChatMessage> messages = plugin.getPrivateMessages();
+        List<WidgetMessage> messages = plugin.getPrivateMessages();
         if (messages.isEmpty()) {
             return null;
         }
@@ -94,10 +104,10 @@ public class PrivateChatOverlay extends Overlay {
 
         int messageCount = messages.size();
         int startIndex = Math.max(0, messageCount - maxMessages);
-        List<ChatMessage> visibleMessages = new ArrayList<>(maxMessages);
+        List<WidgetMessage> visibleMessages = new ArrayList<>(maxMessages);
 
         for (int i = startIndex; i < messageCount; i++) {
-            ChatMessage msg = messages.get(i);
+            WidgetMessage msg = messages.get(i);
             if (fadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < fadeOutThreshold) {
                 visibleMessages.add(msg);
             }
@@ -108,7 +118,7 @@ public class PrivateChatOverlay extends Overlay {
         }
 
         List<GameChatOverlay.RenderLine> renderableLines = new ArrayList<>(visibleMessages.size() * 2);
-        for (ChatMessage msg : visibleMessages) {
+        for (WidgetMessage msg : visibleMessages) {
             List<GameChatOverlay.RenderLine> msgLines = buildRenderLines(msg, metrics, widgetWidth, currentTime,
                     fadeOutMs,
                     wrapText, textColor);
@@ -138,21 +148,22 @@ public class PrivateChatOverlay extends Overlay {
         }
 
         Color bgColor = config.privateBackgroundColor();
-        int padding = bgColor.getAlpha() > 0 ? 3 : 0;
+        int bgPadding = bgColor.getAlpha() > 0 ? 3 : 0;
+        int marginTop = config.privateMarginTop();
+        int marginBottom = config.privateMarginBottom();
 
-        if (padding > 0) {
-            widgetHeight += padding * 2;
-        }
+        int contentHeight = widgetHeight + bgPadding * 2;
+        widgetHeight = contentHeight + marginTop + marginBottom;
 
         if (bgColor.getAlpha() > 0) {
             graphics.setColor(bgColor);
-            graphics.fillRect(0, 0, widgetWidth, widgetHeight);
+            graphics.fillRect(0, marginTop, widgetWidth, contentHeight);
         }
 
         Shape originalClip = graphics.getClip();
         graphics.setClip(0, 0, widgetWidth, widgetHeight + 4);
 
-        int y = widgetHeight - padding - metrics.getDescent();
+        int y = widgetHeight - bgPadding - marginBottom - metrics.getDescent();
         IndexedSprite[] modIcons = client.getModIcons();
 
         for (int i = renderableLines.size() - 1; i >= 0; i--) {
@@ -161,7 +172,7 @@ public class PrivateChatOverlay extends Overlay {
                 continue;
             }
 
-            int x = padding;
+            int x = bgPadding;
 
             for (GameChatOverlay.TextSegment segment : line.segments) {
                 if (segment.iconId >= 0 && modIcons != null && segment.iconId < modIcons.length) {
@@ -255,7 +266,7 @@ public class PrivateChatOverlay extends Overlay {
         return img;
     }
 
-    private List<GameChatOverlay.RenderLine> buildRenderLines(ChatMessage msg, FontMetrics metrics, int widgetWidth,
+    private List<GameChatOverlay.RenderLine> buildRenderLines(WidgetMessage msg, FontMetrics metrics, int widgetWidth,
             long currentTime, long fadeOutMs, boolean wrapText, Color textColor) {
         List<GameChatOverlay.RenderLine> lines = new ArrayList<>();
         int alpha = calculateAlpha(msg, currentTime, fadeOutMs);
@@ -440,7 +451,7 @@ public class PrivateChatOverlay extends Overlay {
         return lines;
     }
 
-    private int calculateAlpha(ChatMessage msg, long currentTime, long fadeOutMs) {
+    private int calculateAlpha(WidgetMessage msg, long currentTime, long fadeOutMs) {
         if (fadeOutMs <= 0) {
             return 255;
         }
