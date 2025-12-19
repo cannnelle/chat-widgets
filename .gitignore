@@ -21,3 +21,7 @@ Thumbs.db
 
 # Local
 *.log
+
+build_output.txt
+compile_output.txt
+comp.txt

@@ -1,4 +1,4 @@
-package com.privatechatwidget;
+package com.chatwidgets;
 
 import net.runelite.api.Client;
 import net.runelite.api.IndexedSprite;
@@ -24,15 +24,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-public class PrivateChatWidgetOverlay extends Overlay {
+public class PrivateChatOverlay extends Overlay {
 
     private static final Pattern IMG_TAG_PATTERN = Pattern.compile("<img=(\\d+)>");
     private static final int MAX_MESSAGE_LENGTH = 500;
 
-    private final PrivateChatWidgetPlugin plugin;
-    private final PrivateChatWidgetConfig config;
+    private final ChatWidgetPlugin plugin;
+    private final ChatWidgetConfig config;
     private final Client client;
 
     private final Map<Integer, BufferedImage> spriteCache = new HashMap<>();
@@ -40,12 +39,13 @@ public class PrivateChatWidgetOverlay extends Overlay {
     private String cachedFormatPattern;
 
     @Inject
-    public PrivateChatWidgetOverlay(PrivateChatWidgetPlugin plugin, PrivateChatWidgetConfig config, Client client) {
+    public PrivateChatOverlay(ChatWidgetPlugin plugin, ChatWidgetConfig config, Client client) {
         this.plugin = plugin;
         this.config = config;
         this.client = client;
         setPosition(OverlayPosition.TOP_LEFT);
         setLayer(OverlayLayer.ABOVE_WIDGETS);
+        setPriority(0);
         setResizable(true);
         setMovable(true);
         setMinimumSize(150);
@@ -53,7 +53,15 @@ public class PrivateChatWidgetOverlay extends Overlay {
 
     @Override
     public Dimension render(Graphics2D graphics) {
-        List<PrivateChatMessage> messages = plugin.getMessages();
+        if (!plugin.shouldShowPrivateOverlay()) {
+            return null;
+        }
+
+        if (config.mergeWithGameWidget() && config.gamePosition() == WidgetPosition.DEFAULT) {
+            return null;
+        }
+
+        List<ChatMessage> messages = plugin.getPrivateMessages();
         if (messages.isEmpty()) {
             return null;
         }
@@ -62,53 +70,74 @@ public class PrivateChatWidgetOverlay extends Overlay {
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
 
-        Font baseFont = config.fontSize() == FontSize.SMALL
+        FontSize fontSize = config.fontSize();
+        Font baseFont = fontSize == FontSize.SMALL
                 ? FontManager.getRunescapeSmallFont()
                 : FontManager.getRunescapeFont();
         graphics.setFont(baseFont);
         FontMetrics metrics = graphics.getFontMetrics();
 
-        int widgetWidth = getPreferredSize() != null && getPreferredSize().width > 0
-                ? getPreferredSize().width
-                : config.widgetWidth();
-        int lineHeight = metrics.getHeight() - (config.fontSize() == FontSize.SMALL ? 2 : 3);
+        Dimension preferredSize = getPreferredSize();
+        int widgetWidth = (preferredSize != null && preferredSize.width > 0)
+                ? preferredSize.width
+                : config.privateWidgetWidth();
+        int lineHeight = metrics.getHeight() - (fontSize == FontSize.SMALL ? 2 : 3) + 1;
         long currentTime = System.currentTimeMillis();
-        long fadeOutMs = config.fadeOutDuration() * 1000L;
-        Color textColor = config.textColor();
+        int fadeOutDuration = config.privateFadeOutDuration();
+        long fadeOutMs = fadeOutDuration * 1000L;
+        long fadeOutThreshold = fadeOutMs + 5000;
+        Color textColor = config.privateTextColor();
         boolean drawShadow = config.textShadow();
-        int maxMessages = config.maxMessages();
+        int maxMessages = config.privateMaxMessages();
+        boolean wrapText = config.wrapText();
+        boolean useDynamicHeight = config.privateDynamicHeight();
 
-        List<PrivateChatMessage> visibleMessages = messages.stream()
-                .filter(msg -> fadeOutMs == 0 || (currentTime - msg.getTimestamp()) < fadeOutMs + 2000)
-                .collect(Collectors.toList());
+        int messageCount = messages.size();
+        int startIndex = Math.max(0, messageCount - maxMessages);
+        List<ChatMessage> visibleMessages = new ArrayList<>(maxMessages);
 
-        if (visibleMessages.size() > maxMessages) {
-            visibleMessages = new ArrayList<>(
-                    visibleMessages.subList(visibleMessages.size() - maxMessages, visibleMessages.size()));
+        for (int i = startIndex; i < messageCount; i++) {
+            ChatMessage msg = messages.get(i);
+            if (fadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < fadeOutThreshold) {
+                visibleMessages.add(msg);
+            }
         }
 
         if (visibleMessages.isEmpty()) {
             return null;
         }
 
-        List<RenderLine> renderLines = new ArrayList<>();
-        for (PrivateChatMessage msg : visibleMessages) {
-            renderLines.addAll(buildRenderLines(msg, metrics, widgetWidth, currentTime, fadeOutMs, config.wrapText()));
+        List<GameChatOverlay.RenderLine> renderableLines = new ArrayList<>(visibleMessages.size() * 2);
+        for (ChatMessage msg : visibleMessages) {
+            List<GameChatOverlay.RenderLine> msgLines = buildRenderLines(msg, metrics, widgetWidth, currentTime,
+                    fadeOutMs,
+                    wrapText, textColor);
+
+            boolean hasVisibleLine = false;
+            for (GameChatOverlay.RenderLine msgLine : msgLines) {
+                if (msgLine.alpha > 0) {
+                    hasVisibleLine = true;
+                    break;
+                }
+            }
+            if (hasVisibleLine) {
+                renderableLines.addAll(msgLines);
+            }
         }
 
-        int actualContentHeight = renderLines.size() * lineHeight;
-        int widgetHeight;
-        int yOffset;
+        if (renderableLines.isEmpty()) {
+            return null;
+        }
 
-        if (config.dynamicHeight()) {
-            widgetHeight = actualContentHeight;
-            yOffset = 0;
+        int widgetHeight;
+
+        if (useDynamicHeight) {
+            widgetHeight = renderableLines.size() * lineHeight;
         } else {
             widgetHeight = maxMessages * lineHeight;
-            yOffset = widgetHeight - actualContentHeight;
         }
 
-        Color bgColor = config.backgroundColor();
+        Color bgColor = config.privateBackgroundColor();
         int padding = bgColor.getAlpha() > 0 ? 3 : 0;
 
         if (padding > 0) {
@@ -123,19 +152,22 @@ public class PrivateChatWidgetOverlay extends Overlay {
         Shape originalClip = graphics.getClip();
         graphics.setClip(0, 0, widgetWidth, widgetHeight + 4);
 
-        int y = yOffset + metrics.getAscent() + padding;
+        int y = widgetHeight - padding - metrics.getDescent();
         IndexedSprite[] modIcons = client.getModIcons();
 
-        for (RenderLine line : renderLines) {
-            if (line.alpha <= 0)
+        for (int i = renderableLines.size() - 1; i >= 0; i--) {
+            GameChatOverlay.RenderLine line = renderableLines.get(i);
+            if (line.alpha <= 0) {
                 continue;
+            }
 
             int x = padding;
-            for (TextSegment segment : line.segments) {
+
+            for (GameChatOverlay.TextSegment segment : line.segments) {
                 if (segment.iconId >= 0 && modIcons != null && segment.iconId < modIcons.length) {
                     BufferedImage img = getCachedSprite(modIcons, segment.iconId);
                     if (img != null) {
-                        boolean isSmallFont = config.fontSize() == FontSize.SMALL;
+                        boolean isSmallFont = fontSize == FontSize.SMALL;
                         int iconWidth = img.getWidth();
                         int iconHeight = img.getHeight();
 
@@ -162,7 +194,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
                     x += metrics.stringWidth(segment.text);
                 }
             }
-            y += lineHeight;
+            y -= lineHeight;
         }
 
         graphics.setClip(originalClip);
@@ -192,8 +224,9 @@ public class PrivateChatWidgetOverlay extends Overlay {
     }
 
     private BufferedImage spriteToBufferedImage(IndexedSprite sprite) {
-        if (sprite == null)
+        if (sprite == null) {
             return null;
+        }
 
         int width = sprite.getWidth();
         int height = sprite.getHeight();
@@ -208,8 +241,9 @@ public class PrivateChatWidgetOverlay extends Overlay {
         for (int py = 0; py < height; py++) {
             for (int px = 0; px < width; px++) {
                 int idx = py * width + px;
-                if (idx >= pixels.length)
+                if (idx >= pixels.length) {
                     continue;
+                }
                 int paletteIdx = pixels[idx] & 0xFF;
                 if (paletteIdx == 0) {
                     img.setRGB(px, py, 0x00000000);
@@ -221,12 +255,12 @@ public class PrivateChatWidgetOverlay extends Overlay {
         return img;
     }
 
-    private List<RenderLine> buildRenderLines(PrivateChatMessage msg, FontMetrics metrics, int widgetWidth,
-            long currentTime, long fadeOutMs, boolean wrapText) {
-        List<RenderLine> lines = new ArrayList<>();
+    private List<GameChatOverlay.RenderLine> buildRenderLines(ChatMessage msg, FontMetrics metrics, int widgetWidth,
+            long currentTime, long fadeOutMs, boolean wrapText, Color textColor) {
+        List<GameChatOverlay.RenderLine> lines = new ArrayList<>();
         int alpha = calculateAlpha(msg, currentTime, fadeOutMs);
 
-        List<TextSegment> headerSegments = new ArrayList<>();
+        List<GameChatOverlay.TextSegment> headerSegments = new ArrayList<>();
         int headerWidth = 0;
 
         if (config.showTimestamp()) {
@@ -234,23 +268,24 @@ public class PrivateChatWidgetOverlay extends Overlay {
             if (format != null && !format.isEmpty()) {
                 String ts = formatTimestamp(msg.getTimestamp(), format + " ");
                 if (ts != null) {
-                    headerSegments.add(new TextSegment(ts, -1, metrics.stringWidth(ts)));
+                    headerSegments.add(new GameChatOverlay.TextSegment(ts, -1, metrics.stringWidth(ts), textColor));
                     headerWidth += metrics.stringWidth(ts);
                 }
             }
         }
 
         String prefix = msg.isOutgoing() ? "To " : "From ";
-        headerSegments.add(new TextSegment(prefix, -1, metrics.stringWidth(prefix)));
+        headerSegments.add(new GameChatOverlay.TextSegment(prefix, -1, metrics.stringWidth(prefix), textColor));
         headerWidth += metrics.stringWidth(prefix);
 
-        List<TextSegment> senderSegments = parseTextWithIcons(msg.getSender(), metrics, client.getModIcons());
-        for (TextSegment seg : senderSegments) {
+        List<GameChatOverlay.TextSegment> senderSegments = parseTextWithIcons(msg.getSender(), metrics,
+                client.getModIcons(), textColor);
+        for (GameChatOverlay.TextSegment seg : senderSegments) {
             headerSegments.add(seg);
             headerWidth += seg.width;
         }
 
-        headerSegments.add(new TextSegment(": ", -1, metrics.stringWidth(": ")));
+        headerSegments.add(new GameChatOverlay.TextSegment(": ", -1, metrics.stringWidth(": "), textColor));
         headerWidth += metrics.stringWidth(": ");
 
         String messageText = msg.getMessage();
@@ -258,26 +293,28 @@ public class PrivateChatWidgetOverlay extends Overlay {
             messageText = messageText.substring(0, MAX_MESSAGE_LENGTH) + "...";
         }
 
-        List<TextSegment> messageSegments = parseTextWithIcons(messageText, metrics, client.getModIcons());
+        List<GameChatOverlay.TextSegment> messageSegments = parseTextWithIcons(messageText, metrics,
+                client.getModIcons(), textColor);
 
         if (!wrapText) {
-            List<TextSegment> singleLine = new ArrayList<>(headerSegments);
+            List<GameChatOverlay.TextSegment> singleLine = new ArrayList<>(headerSegments);
             singleLine.addAll(messageSegments);
-            lines.add(new RenderLine(singleLine, alpha));
+            lines.add(new GameChatOverlay.RenderLine(singleLine, alpha));
         } else {
             int firstLineRemaining = widgetWidth - headerWidth;
-            List<List<TextSegment>> wrappedLines = wrapSegments(messageSegments, metrics, firstLineRemaining,
-                    widgetWidth);
+            List<List<GameChatOverlay.TextSegment>> wrappedLines = wrapSegments(messageSegments, metrics,
+                    firstLineRemaining,
+                    widgetWidth, textColor);
 
             if (wrappedLines.isEmpty()) {
-                lines.add(new RenderLine(headerSegments, alpha));
+                lines.add(new GameChatOverlay.RenderLine(headerSegments, alpha));
             } else {
-                List<TextSegment> firstLine = new ArrayList<>(headerSegments);
+                List<GameChatOverlay.TextSegment> firstLine = new ArrayList<>(headerSegments);
                 firstLine.addAll(wrappedLines.get(0));
-                lines.add(new RenderLine(firstLine, alpha));
+                lines.add(new GameChatOverlay.RenderLine(firstLine, alpha));
 
                 for (int i = 1; i < wrappedLines.size(); i++) {
-                    lines.add(new RenderLine(wrappedLines.get(i), alpha));
+                    lines.add(new GameChatOverlay.RenderLine(wrappedLines.get(i), alpha));
                 }
             }
         }
@@ -297,10 +334,12 @@ public class PrivateChatWidgetOverlay extends Overlay {
         }
     }
 
-    private List<TextSegment> parseTextWithIcons(String text, FontMetrics metrics, IndexedSprite[] modIcons) {
-        List<TextSegment> segments = new ArrayList<>();
-        if (text == null || text.isEmpty())
+    private List<GameChatOverlay.TextSegment> parseTextWithIcons(String text, FontMetrics metrics,
+            IndexedSprite[] modIcons, Color textColor) {
+        List<GameChatOverlay.TextSegment> segments = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
             return segments;
+        }
 
         Matcher matcher = IMG_TAG_PATTERN.matcher(text);
         int lastEnd = 0;
@@ -308,7 +347,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
         while (matcher.find()) {
             if (matcher.start() > lastEnd) {
                 String before = text.substring(lastEnd, matcher.start());
-                segments.add(new TextSegment(before, -1, metrics.stringWidth(before)));
+                segments.add(new GameChatOverlay.TextSegment(before, -1, metrics.stringWidth(before), textColor));
             }
 
             try {
@@ -320,29 +359,30 @@ public class PrivateChatWidgetOverlay extends Overlay {
                         iconWidth = (int) (iconWidth * 0.75);
                     }
                 }
-                segments.add(new TextSegment("", iconId, iconWidth));
+                segments.add(new GameChatOverlay.TextSegment("", iconId, iconWidth, textColor));
             } catch (NumberFormatException e) {
                 String raw = matcher.group(0);
-                segments.add(new TextSegment(raw, -1, metrics.stringWidth(raw)));
+                segments.add(new GameChatOverlay.TextSegment(raw, -1, metrics.stringWidth(raw), textColor));
             }
             lastEnd = matcher.end();
         }
 
         if (lastEnd < text.length()) {
             String after = text.substring(lastEnd);
-            segments.add(new TextSegment(after, -1, metrics.stringWidth(after)));
+            segments.add(new GameChatOverlay.TextSegment(after, -1, metrics.stringWidth(after), textColor));
         }
 
         return segments;
     }
 
-    private List<List<TextSegment>> wrapSegments(List<TextSegment> segments, FontMetrics metrics,
-            int firstLineWidth, int subsequentLineWidth) {
-        List<List<TextSegment>> lines = new ArrayList<>();
-        List<TextSegment> currentLine = new ArrayList<>();
+    private List<List<GameChatOverlay.TextSegment>> wrapSegments(List<GameChatOverlay.TextSegment> segments,
+            FontMetrics metrics,
+            int firstLineWidth, int subsequentLineWidth, Color textColor) {
+        List<List<GameChatOverlay.TextSegment>> lines = new ArrayList<>();
+        List<GameChatOverlay.TextSegment> currentLine = new ArrayList<>();
         int currentWidth = firstLineWidth;
 
-        for (TextSegment segment : segments) {
+        for (GameChatOverlay.TextSegment segment : segments) {
             if (segment.iconId >= 0) {
                 if (segment.width <= currentWidth) {
                     currentLine.add(segment);
@@ -358,12 +398,12 @@ public class PrivateChatWidgetOverlay extends Overlay {
                 }
             } else {
                 String[] words = segment.text.split(" ", -1);
-                for (int i = 0; i < words.length; i++) {
-                    String word = words[i];
-                    if (word.isEmpty() && i < words.length - 1) {
+                for (int wi = 0; wi < words.length; wi++) {
+                    String word = words[wi];
+                    if (word.isEmpty() && wi < words.length - 1) {
                         int spaceWidth = metrics.stringWidth(" ");
                         if (spaceWidth <= currentWidth) {
-                            currentLine.add(new TextSegment(" ", -1, spaceWidth));
+                            currentLine.add(new GameChatOverlay.TextSegment(" ", -1, spaceWidth, segment.color));
                             currentWidth -= spaceWidth;
                         }
                         continue;
@@ -371,15 +411,15 @@ public class PrivateChatWidgetOverlay extends Overlay {
 
                     int wordWidth = metrics.stringWidth(word);
                     int spaceWidth = metrics.stringWidth(" ");
-                    boolean needsSpace = !currentLine.isEmpty() && i > 0;
+                    boolean needsSpace = !currentLine.isEmpty() && wi > 0;
                     int neededWidth = wordWidth + (needsSpace ? spaceWidth : 0);
 
                     if (neededWidth <= currentWidth) {
                         if (needsSpace) {
-                            currentLine.add(new TextSegment(" ", -1, spaceWidth));
+                            currentLine.add(new GameChatOverlay.TextSegment(" ", -1, spaceWidth, segment.color));
                             currentWidth -= spaceWidth;
                         }
-                        currentLine.add(new TextSegment(word, -1, wordWidth));
+                        currentLine.add(new GameChatOverlay.TextSegment(word, -1, wordWidth, segment.color));
                         currentWidth -= wordWidth;
                     } else {
                         if (!currentLine.isEmpty()) {
@@ -387,7 +427,7 @@ public class PrivateChatWidgetOverlay extends Overlay {
                             currentLine = new ArrayList<>();
                             currentWidth = subsequentLineWidth;
                         }
-                        currentLine.add(new TextSegment(word, -1, wordWidth));
+                        currentLine.add(new GameChatOverlay.TextSegment(word, -1, wordWidth, segment.color));
                         currentWidth -= wordWidth;
                     }
                 }
@@ -400,39 +440,19 @@ public class PrivateChatWidgetOverlay extends Overlay {
         return lines;
     }
 
-    private int calculateAlpha(PrivateChatMessage msg, long currentTime, long fadeOutMs) {
-        if (fadeOutMs <= 0)
+    private int calculateAlpha(ChatMessage msg, long currentTime, long fadeOutMs) {
+        if (fadeOutMs <= 0) {
             return 255;
+        }
         long age = currentTime - msg.getTimestamp();
-        if (age <= fadeOutMs)
+        if (age <= fadeOutMs) {
             return 255;
+        }
         double fadeProgress = Math.min(1.0, (age - fadeOutMs) / 1200.0);
         return (int) (255 * (1.0 - fadeProgress));
     }
 
     private Color withAlpha(Color color, int alpha) {
         return new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.max(0, Math.min(255, alpha)));
-    }
-
-    private static class RenderLine {
-        final List<TextSegment> segments;
-        final int alpha;
-
-        RenderLine(List<TextSegment> segments, int alpha) {
-            this.segments = segments;
-            this.alpha = alpha;
-        }
-    }
-
-    private static class TextSegment {
-        final String text;
-        final int iconId;
-        final int width;
-
-        TextSegment(String text, int iconId, int width) {
-            this.text = text;
-            this.iconId = iconId;
-            this.width = width;
-        }
     }
 }
