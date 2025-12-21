@@ -124,7 +124,7 @@ public interface ChatWidgetConfig extends Config {
     // Game Messages Advanced Section
     @ConfigItem(keyName = "gameDynamicHeight", name = "Dynamic Height", description = "Widget height adjusts to message count", section = gameAdvancedSection, position = 0)
     default boolean gameDynamicHeight() {
-        return true;
+        return false;
     }
 
     @ConfigItem(keyName = "retainContextualColours", name = "Contextual Colours", description = "Retain colour tags in game messages", section = gameAdvancedSection, position = 1)
@@ -175,7 +175,7 @@ public interface ChatWidgetConfig extends Config {
     // Private Messages Advanced Section
     @ConfigItem(keyName = "privateDynamicHeight", name = "Dynamic Height", description = "Widget height adjusts to message count (only when not merged)", section = privateAdvancedSection, position = 0)
     default boolean privateDynamicHeight() {
-        return true;
+        return false;
     }
 
     @ConfigItem(keyName = "privateFadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", section = privateAdvancedSection, position = 1)

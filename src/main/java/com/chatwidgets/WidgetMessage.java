@@ -10,20 +10,26 @@ public class WidgetMessage {
     private final String sender;
     private final boolean outgoing;
     private final boolean isPrivate;
+    private final int maxFadeSeconds;
     private int count = 1;
 
     public static WidgetMessage gameMessage(String message, long timestamp, ChatMessageType type, boolean bossKc) {
-        return new WidgetMessage(message, timestamp, type, bossKc, null, false, false);
+        return new WidgetMessage(message, timestamp, type, bossKc, null, false, false, 0);
     }
 
     public static WidgetMessage privateMessage(String sender, String message, long timestamp, boolean outgoing) {
         return new WidgetMessage(message, timestamp,
                 outgoing ? ChatMessageType.PRIVATECHATOUT : ChatMessageType.PRIVATECHAT,
-                false, sender, outgoing, true);
+                false, sender, outgoing, true, 0);
+    }
+
+    public static WidgetMessage loginNotification(String sender, String message, long timestamp, int maxFadeSeconds) {
+        return new WidgetMessage(message, timestamp, ChatMessageType.LOGINLOGOUTNOTIFICATION,
+                false, sender, false, true, maxFadeSeconds);
     }
 
     private WidgetMessage(String message, long timestamp, ChatMessageType type, boolean bossKc,
-            String sender, boolean outgoing, boolean isPrivate) {
+            String sender, boolean outgoing, boolean isPrivate, int maxFadeSeconds) {
         this.message = message;
         this.timestamp = timestamp;
         this.type = type;
@@ -31,6 +37,7 @@ public class WidgetMessage {
         this.sender = sender;
         this.outgoing = outgoing;
         this.isPrivate = isPrivate;
+        this.maxFadeSeconds = maxFadeSeconds;
     }
 
     public String getMessage() {
@@ -67,5 +74,9 @@ public class WidgetMessage {
 
     public void incrementCount() {
         count++;
+    }
+
+    public int getMaxFadeSeconds() {
+        return maxFadeSeconds;
     }
 }

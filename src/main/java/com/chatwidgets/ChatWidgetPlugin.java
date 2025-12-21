@@ -187,21 +187,18 @@ public class ChatWidgetPlugin extends Plugin {
         }
 
         if (option.equals("Clear") && target != null) {
-            if (target.contains("Merged")) {
-                clearGameMessages();
-                clearPrivateMessages();
-            } else if (target.contains("Game")) {
-                clearGameMessages();
-            } else if (target.contains("Private")) {
-                clearPrivateMessages();
+            switch (target) {
+                case "Merged chat history":
+                    clearGameMessages();
+                    clearPrivateMessages();
+                    break;
+                case "Game chat history":
+                    clearGameMessages();
+                    break;
+                case "Private chat history":
+                    clearPrivateMessages();
+                    break;
             }
-        }
-
-        if (option.contains("Game:") && option.contains("Clear")) {
-            clearGameMessages();
-        }
-        if (option.contains("Private:") && option.contains("Clear")) {
-            clearPrivateMessages();
         }
     }
 
@@ -209,13 +206,37 @@ public class ChatWidgetPlugin extends Plugin {
     public void onChatMessage(ChatMessage event) {
         ChatMessageType type = event.getType();
 
-        if (type == ChatMessageType.GAMEMESSAGE
-                || type == ChatMessageType.SPAM
-                || type == ChatMessageType.CONSOLE
-                || type == ChatMessageType.WELCOME) {
-            handleGameMessage(event);
-        } else if (type == ChatMessageType.PRIVATECHAT || type == ChatMessageType.PRIVATECHATOUT) {
-            handlePrivateMessage(event);
+        switch (type) {
+            case GAMEMESSAGE:
+            case SPAM:
+            case CONSOLE:
+            case WELCOME:
+            case BROADCAST:
+            case DIDYOUKNOW:
+            case ENGINE:
+            case FRIENDNOTIFICATION:
+            case FRIENDSCHATNOTIFICATION:
+            case IGNORENOTIFICATION:
+            case ITEM_EXAMINE:
+            case NPC_EXAMINE:
+            case OBJECT_EXAMINE:
+            case PLAYERRELATED:
+            case SNAPSHOTFEEDBACK:
+            case TRADE:
+            case TRADE_SENT:
+            case TRADEREQ:
+                handleGameMessage(event);
+                break;
+            case PRIVATECHAT:
+            case PRIVATECHATOUT:
+            case MODPRIVATECHAT:
+                handlePrivateMessage(event);
+                break;
+            case LOGINLOGOUTNOTIFICATION:
+                handleLoginLogoutNotification(event);
+                break;
+            default:
+                break;
         }
     }
 
@@ -277,6 +298,32 @@ public class ChatWidgetPlugin extends Plugin {
 
         privateMessages.add(WidgetMessage.privateMessage(
                 sender, message.trim(), System.currentTimeMillis(), isOutgoing));
+
+        while (privateMessages.size() > config.privateMaxMessages() * 2) {
+            privateMessages.remove(0);
+        }
+    }
+
+    private void handleLoginLogoutNotification(ChatMessage event) {
+        String sender = event.getName();
+        if (sender != null) {
+            sender = sender.replace('\u00A0', ' ').trim();
+        } else {
+            sender = "System";
+        }
+
+        String message = event.getMessage();
+        if (message == null || message.trim().isEmpty()) {
+            return;
+        }
+
+        int maxFade = Math.min(5, config.privateFadeOutDuration());
+        if (maxFade <= 0) {
+            maxFade = 5;
+        }
+
+        privateMessages.add(WidgetMessage.loginNotification(
+                sender, message.trim(), System.currentTimeMillis(), maxFade));
 
         while (privateMessages.size() > config.privateMaxMessages() * 2) {
             privateMessages.remove(0);
@@ -363,11 +410,19 @@ public class ChatWidgetPlugin extends Plugin {
 
         long currentTime = System.currentTimeMillis();
         int fadeOutDuration = config.privateFadeOutDuration();
-        long fadeOutThreshold = fadeOutDuration > 0 ? (fadeOutDuration * 2000L) + 2000 : 0;
+        long defaultFadeOutThreshold = fadeOutDuration > 0 ? (fadeOutDuration * 2000L) + 2000 : 0;
 
         List<WidgetMessage> filtered = new ArrayList<>(Math.min(size, config.privateMaxMessages()));
         for (int i = 0; i < size; i++) {
             WidgetMessage msg = privateMessages.get(i);
+
+            int msgMaxFade = msg.getMaxFadeSeconds();
+            long fadeOutThreshold;
+            if (msgMaxFade > 0) {
+                fadeOutThreshold = (msgMaxFade * 1000L) + 2000;
+            } else {
+                fadeOutThreshold = defaultFadeOutThreshold;
+            }
 
             if (fadeOutThreshold > 0 && currentTime - msg.getTimestamp() >= fadeOutThreshold) {
                 continue;
