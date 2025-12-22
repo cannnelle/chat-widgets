@@ -20,7 +20,8 @@ import java.util.regex.Pattern;
 
 public final class ChatRenderUtils {
 
-    private ChatRenderUtils() { }
+    private ChatRenderUtils() {
+    }
 
     public static FontMetrics setupGraphics(Graphics2D graphics, FontSize fontSize) {
         graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
@@ -53,7 +54,11 @@ public final class ChatRenderUtils {
             iconY += 2;
         }
 
-        graphics.drawImage(img, x + 1, Math.max(iconY, 0), iconWidth, iconHeight, null);
+        if (iconY < 0) {
+            return iconWidth + 2;
+        }
+
+        graphics.drawImage(img, x + 1, iconY, iconWidth, iconHeight, null);
         return iconWidth + 2;
     }
 
@@ -152,7 +157,8 @@ public final class ChatRenderUtils {
         return lines;
     }
 
-    public static void addWrappedLines(List<RenderLine> lines, int alpha, List<TextSegment> headerSegments, List<List<TextSegment>> wrappedLines) {
+    public static void addWrappedLines(List<RenderLine> lines, int alpha, List<TextSegment> headerSegments,
+            List<List<TextSegment>> wrappedLines) {
         if (wrappedLines.isEmpty()) {
             lines.add(new RenderLine(headerSegments, alpha));
         } else {
