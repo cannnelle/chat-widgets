@@ -6,6 +6,7 @@ import net.runelite.api.IndexedSprite;
 import net.runelite.api.MenuAction;
 import net.runelite.api.Point;
 import net.runelite.api.Player;
+import net.runelite.client.config.ChatColorConfig;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
@@ -31,6 +32,8 @@ public class GameChatOverlay extends Overlay {
 
     private static final Pattern IMG_TAG_PATTERN = Pattern.compile("<img=(\\d+)>");
     private static final Pattern COL_TAG_PATTERN = Pattern.compile("<col=([0-9a-fA-F]{6})>");
+    private static final Pattern COL_NAMED_PATTERN = Pattern.compile("<col(NORMAL|HIGHLIGHT)>");
+    private static final Pattern COL_UNKNOWN_PATTERN = Pattern.compile("<col[^>]*>");
     private static final Pattern COL_END_PATTERN = Pattern.compile("</col>");
     private static final int MAX_MESSAGE_LENGTH = 500;
 
@@ -44,16 +47,19 @@ public class GameChatOverlay extends Overlay {
     private final ChatWidgetPlugin plugin;
     private final ChatWidgetConfig config;
     private final Client client;
+    private final ChatColorConfig chatColorConfig;
 
     private final Map<Integer, BufferedImage> spriteCache = new HashMap<>();
     private SimpleDateFormat cachedDateFormat;
     private String cachedFormatPattern;
 
     @Inject
-    public GameChatOverlay(ChatWidgetPlugin plugin, ChatWidgetConfig config, Client client) {
+    public GameChatOverlay(ChatWidgetPlugin plugin, ChatWidgetConfig config, Client client,
+            ChatColorConfig chatColorConfig) {
         this.plugin = plugin;
         this.config = config;
         this.client = client;
+        this.chatColorConfig = chatColorConfig;
         setPosition(client.isResized() ? OverlayPosition.ABOVE_CHATBOX_RIGHT : OverlayPosition.BOTTOM_LEFT);
         setLayer(OverlayLayer.UNDER_WIDGETS);
         setPriority(config.swapStackingOrder() ? 9f : 10f);
@@ -377,7 +383,8 @@ public class GameChatOverlay extends Overlay {
         for (int i = privateStartIndex; i < privateMessageCount; i++) {
             WidgetMessage msg = privateMessages.get(i);
             if (privateFadeOutDuration == 0 || (currentTime - msg.getTimestamp()) < privateFadeOutThreshold) {
-                List<RenderLine> msgLines = ChatRenderUtils.buildPrivateMessageLines(msg, metrics, widgetWidth, currentTime, privateFadeOutMs,
+                List<RenderLine> msgLines = ChatRenderUtils.buildPrivateMessageLines(msg, metrics, widgetWidth,
+                        currentTime, privateFadeOutMs,
                         wrapText, privateTextColor, config.fontSize(), client.getModIcons(), config.showTimestamp(),
                         config.timestampFormat(), MAX_MESSAGE_LENGTH);
 
@@ -404,6 +411,7 @@ public class GameChatOverlay extends Overlay {
         while (i < text.length()) {
             Matcher imgMatcher = IMG_TAG_PATTERN.matcher(text.substring(i));
             Matcher colMatcher = COL_TAG_PATTERN.matcher(text.substring(i));
+            Matcher colNamedMatcher = COL_NAMED_PATTERN.matcher(text.substring(i));
             Matcher colEndMatcher = COL_END_PATTERN.matcher(text.substring(i));
 
             if (imgMatcher.lookingAt()) {
@@ -420,6 +428,20 @@ public class GameChatOverlay extends Overlay {
                     currentText.append(imgMatcher.group(0));
                 }
                 i += imgMatcher.end();
+            } else if (colNamedMatcher.lookingAt()) {
+                if (currentText.length() > 0) {
+                    String str = currentText.toString();
+                    segments.add(new TextSegment(str, -1, metrics.stringWidth(str), currentColor));
+                    currentText = new StringBuilder();
+                }
+                String colorName = colNamedMatcher.group(1);
+                if ("NORMAL".equals(colorName)) {
+                    currentColor = textColor;
+                } else if ("HIGHLIGHT".equals(colorName)) {
+                    Color highlight = chatColorConfig.transparentExamineHighlight();
+                    currentColor = highlight != null ? highlight : textColor;
+                }
+                i += colNamedMatcher.end();
             } else if (colMatcher.lookingAt() && retainContextualColours) {
                 if (currentText.length() > 0) {
                     String str = currentText.toString();
@@ -445,8 +467,13 @@ public class GameChatOverlay extends Overlay {
             } else if (colEndMatcher.lookingAt() && !retainContextualColours) {
                 i += colEndMatcher.end();
             } else {
-                currentText.append(text.charAt(i));
-                i++;
+                Matcher colUnknownMatcher = COL_UNKNOWN_PATTERN.matcher(text.substring(i));
+                if (colUnknownMatcher.lookingAt()) {
+                    i += colUnknownMatcher.end();
+                } else {
+                    currentText.append(text.charAt(i));
+                    i++;
+                }
             }
         }
 
