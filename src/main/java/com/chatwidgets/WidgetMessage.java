@@ -40,6 +40,13 @@ public class WidgetMessage {
         this.maxFadeSeconds = maxFadeSeconds;
     }
 
+    public WidgetMessage withMessage(String newMessage) {
+        WidgetMessage merged = new WidgetMessage(newMessage, this.timestamp, this.type, this.bossKc,
+                this.sender, this.outgoing, this.isPrivate, this.maxFadeSeconds);
+        merged.count = this.count;
+        return merged;
+    }
+
     public String getMessage() {
         return message;
     }

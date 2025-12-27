@@ -281,7 +281,13 @@ public final class ChatRenderUtils {
         int currentWidth = firstLineWidth;
 
         for (TextSegment segment : segments) {
-            if (segment.iconId >= 0) {
+            if (segment.iconId == TextSegment.LINE_BREAK) {
+                if (!currentLine.isEmpty()) {
+                    lines.add(currentLine);
+                    currentLine = new ArrayList<>();
+                }
+                currentWidth = subsequentLineWidth;
+            } else if (segment.iconId >= 0) {
                 if (segment.width <= currentWidth) {
                     currentLine.add(segment);
                     currentWidth -= segment.width;

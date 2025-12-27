@@ -35,6 +35,11 @@ public class ChatWidgetPlugin extends Plugin {
 
     private static final Pattern BOSS_KC_PATTERN = Pattern.compile("Your .+ count is:");
 
+    private static final MessageMergeRule[] MESSAGE_MERGE_RULES = {
+            new MessageMergeRule("You eat", "It heals some health.", true),
+            new MessageMergeRule("You drink", "You have", false)
+    };
+
     @Inject
     private Client client;
 
@@ -227,14 +232,17 @@ public class ChatWidgetPlugin extends Plugin {
             case TRADEREQ:
                 handleGameMessage(event);
                 break;
+
             case PRIVATECHAT:
             case PRIVATECHATOUT:
             case MODPRIVATECHAT:
                 handlePrivateMessage(event);
                 break;
+
             case LOGINLOGOUTNOTIFICATION:
                 handleLoginLogoutNotification(event);
                 break;
+
             default:
                 break;
         }
@@ -262,6 +270,15 @@ public class ChatWidgetPlugin extends Plugin {
             }
         }
 
+        if (!gameMessages.isEmpty()) {
+            WidgetMessage lastMsg = gameMessages.get(gameMessages.size() - 1);
+            String merged = tryMergeMessages(lastMsg.getMessage(), cleanMessage);
+            if (merged != null) {
+                gameMessages.set(gameMessages.size() - 1, lastMsg.withMessage(merged));
+                return;
+            }
+        }
+
         WidgetMessage newMsg = WidgetMessage.gameMessage(
                 cleanMessage, System.currentTimeMillis(), event.getType(), isBossKc);
         for (int i = 0; i < existingCount; i++) {
@@ -272,6 +289,15 @@ public class ChatWidgetPlugin extends Plugin {
         while (gameMessages.size() > config.gameMaxMessages() * 2) {
             gameMessages.remove(0);
         }
+    }
+
+    private String tryMergeMessages(String previousMessage, String newMessage) {
+        for (MessageMergeRule rule : MESSAGE_MERGE_RULES) {
+            if (rule.matches(previousMessage, newMessage)) {
+                return rule.merge(previousMessage, newMessage);
+            }
+        }
+        return null;
     }
 
     private String stripTags(String text) {

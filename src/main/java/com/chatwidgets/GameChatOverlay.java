@@ -35,6 +35,7 @@ public class GameChatOverlay extends Overlay {
     private static final Pattern COL_NAMED_PATTERN = Pattern.compile("<col(NORMAL|HIGHLIGHT)>");
     private static final Pattern COL_UNKNOWN_PATTERN = Pattern.compile("<col[^>]*>");
     private static final Pattern COL_END_PATTERN = Pattern.compile("</col>");
+    private static final Pattern BR_TAG_PATTERN = Pattern.compile("<br>");
     private static final int MAX_MESSAGE_LENGTH = 500;
 
     private static final int MIN_ZOOM = -22;
@@ -413,8 +414,17 @@ public class GameChatOverlay extends Overlay {
             Matcher colMatcher = COL_TAG_PATTERN.matcher(text.substring(i));
             Matcher colNamedMatcher = COL_NAMED_PATTERN.matcher(text.substring(i));
             Matcher colEndMatcher = COL_END_PATTERN.matcher(text.substring(i));
+            Matcher brMatcher = BR_TAG_PATTERN.matcher(text.substring(i));
 
-            if (imgMatcher.lookingAt()) {
+            if (brMatcher.lookingAt()) {
+                if (currentText.length() > 0) {
+                    String str = currentText.toString();
+                    segments.add(new TextSegment(str, -1, metrics.stringWidth(str), currentColor));
+                    currentText = new StringBuilder();
+                }
+                segments.add(new TextSegment("", TextSegment.LINE_BREAK, 0, currentColor));
+                i += brMatcher.end();
+            } else if (imgMatcher.lookingAt()) {
                 if (currentText.length() > 0) {
                     String str = currentText.toString();
                     segments.add(new TextSegment(str, -1, metrics.stringWidth(str), currentColor));

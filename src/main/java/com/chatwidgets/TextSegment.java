@@ -3,6 +3,8 @@ package com.chatwidgets;
 import java.awt.Color;
 
 public class TextSegment {
+    public static final int LINE_BREAK = -2;
+
     public final String text;
     public final int iconId;
     public final int width;
