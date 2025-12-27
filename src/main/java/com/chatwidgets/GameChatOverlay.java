@@ -19,9 +19,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Shape;
 import java.awt.image.BufferedImage;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +49,6 @@ public class GameChatOverlay extends Overlay {
     private final ChatColorConfig chatColorConfig;
 
     private final Map<Integer, BufferedImage> spriteCache = new HashMap<>();
-    private SimpleDateFormat cachedDateFormat;
-    private String cachedFormatPattern;
 
     @Inject
     public GameChatOverlay(ChatWidgetPlugin plugin, ChatWidgetConfig config, Client client,
