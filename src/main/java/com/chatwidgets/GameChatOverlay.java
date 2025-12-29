@@ -168,9 +168,8 @@ public class GameChatOverlay extends Overlay {
                 }
                 if (playerPoint != null) {
                     int zoomOffset = calculateZoomOffset(positionMode);
-                    int playerOffset = getClampedPlayerOffset(positionMode);
                     int x = playerPoint.getX() - widgetWidth / 2;
-                    int y = playerPoint.getY() + zoomOffset + playerOffset - widgetHeight / 2;
+                    int y = playerPoint.getY() + zoomOffset - widgetHeight / 2;
                     graphics.translate(x - getBounds().x, y - getBounds().y);
                 }
             }
@@ -215,22 +214,6 @@ public class GameChatOverlay extends Overlay {
             return null;
         }
         return new Dimension(widgetWidth, widgetHeight);
-    }
-
-    private int getClampedPlayerOffset(WidgetPosition positionMode) {
-        int offset = config.gamePlayerOffset();
-
-        if (positionMode == WidgetPosition.BELOW_PLAYER) {
-            if (offset == 0) {
-                return -25;
-            }
-            return Math.max(-50, Math.min(0, offset));
-        } else {
-            if (offset == 0) {
-                return 25;
-            }
-            return Math.max(0, Math.min(50, offset));
-        }
     }
 
     private int calculateZoomOffset(WidgetPosition positionMode) {

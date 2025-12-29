@@ -1,10 +1,10 @@
 # Chat Widgets
 
-**Version 1.0.1**
+**Version 1.0.2**
 
 Displays game chat and private chat messages in their own customizable widgets. Supports custom colours, repositioning, game message collapsing, font size, and more.
 
-This plugin was created due to my own desire for a moveable private chat message and to peek at 1-2 game messages while my chat box is minimized.
+This plugin was created due to my own desire to move private messages and to peek at 1 or 2 game messages while my chat box is minimized.
 
 ## Examples
 
@@ -19,17 +19,9 @@ Display options are quite flexible. Below are some configuration examples.
 
 ![default](https://github.com/user-attachments/assets/ebfb08a7-c049-480c-ad75-618f8cf4c056)
 
-**Below Player**
+**Relative to Player**
 
-- **Position:** Below Player (Offset: 0)
-- **Fade Out Duration:** 3s
-- **Max Messages:** 1
-
-<video src="https://github.com/user-attachments/assets/52c2c0c1-4817-4231-87cf-a54ffa6c6245" style="width: 100%"></video>
-
-**Above Player**
-
-- **Position:** Above Player (Offset: 0)
+- **Position:** Above Player (0 margin applied)
 - **Fade Out Duration:** 3s
 - **Max Messages:** 1
 
@@ -64,10 +56,9 @@ Display options are quite flexible. Below are some configuration examples.
 | Setting                  | Description                                                                                                                                                                                      |
 | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Position**             | Widget position mode. `Default` uses standard overlay positioning. `Below Player` and `Above Player` position the widget relative to your character (works best with fade and low max messages). |
-| **Contextual Colours**   | Retain colour formatting from in-game messages (e.g., item names, quest text).                                                                                                                   |
+| **Contextual Colours**   | Retain colour formatting from in-game messages (coloured messages during boss fights, music tracks, etc.).                                                                                       |
 | **Collapse Duplicates**  | Combine identical consecutive messages with a count indicator.                                                                                                                                   |
 | **Hide Duplicate Count** | Hide the count badge when collapsing duplicates.                                                                                                                                                 |
-| **Player Offset**        | Vertical offset when positioned relative to player (-50 to 50).                                                                                                                                  |
 
 ### Advanced Settings
 

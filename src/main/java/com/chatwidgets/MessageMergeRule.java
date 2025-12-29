@@ -19,6 +19,10 @@ public class MessageMergeRule {
     }
 
     public String merge(String previousMessage, String newMessage) {
-        return previousMessage + "<br>" + newMessage;
+        return previousMessage + " " + newMessage;
+    }
+
+    public boolean matchesPreviousPrefix(String message) {
+        return message.startsWith(previousPrefix);
     }
 }

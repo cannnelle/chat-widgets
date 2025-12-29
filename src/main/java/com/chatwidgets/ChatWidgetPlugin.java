@@ -72,18 +72,19 @@ public class ChatWidgetPlugin extends Plugin {
     protected void shutDown() {
         overlayManager.remove(gameOverlay);
         overlayManager.remove(privateOverlay);
-        clearGameMessages();
-        clearPrivateMessages();
+        //keep history for now i think
+        //clearGameMessages();
+        //clearPrivateMessages();
         showPmWidgets();
     }
 
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
-        if (!"chatwidgets".equals(event.getGroup())) {
+        if (!event.getGroup().equals("chatwidgets")) {
             return;
         }
 
-        if ("enablePrivateMessages".equals(event.getKey())) {
+        if (event.getKey().equals("enablePrivateMessages")) {
             if (config.enablePrivateMessages()) {
                 hidePmWidgets();
             } else {
@@ -91,7 +92,7 @@ public class ChatWidgetPlugin extends Plugin {
             }
         }
 
-        if ("swapStackingOrder".equals(event.getKey())) {
+        if (event.getKey().equals("swapStackingOrder")) {
             overlayManager.remove(gameOverlay);
             overlayManager.remove(privateOverlay);
             overlayManager.add(gameOverlay);
@@ -102,7 +103,8 @@ public class ChatWidgetPlugin extends Plugin {
     @Subscribe
     public void onGameStateChanged(GameStateChanged event) {
         if (event.getGameState() == GameState.LOGIN_SCREEN) {
-            clearGameMessages();
+            //keep history for now i think
+            // clearGameMessages();
         }
         if (event.getGameState() == GameState.LOGGED_IN && config.enablePrivateMessages()) {
             hidePmWidgets();
@@ -230,6 +232,7 @@ public class ChatWidgetPlugin extends Plugin {
             case TRADE:
             case TRADE_SENT:
             case TRADEREQ:
+            case UNKNOWN: //combat achievements-related?
                 handleGameMessage(event);
                 break;
 
@@ -255,7 +258,42 @@ public class ChatWidgetPlugin extends Plugin {
         }
 
         String cleanMessage = message.trim();
+        for (MessageMergeRule rule : MESSAGE_MERGE_RULES) {
+            if (rule.matchesPreviousPrefix(cleanMessage)) {
+                cleanMessage = cleanMessage.replace("<br>", " ");
+                break;
+            }
+        }
         boolean isBossKc = BOSS_KC_PATTERN.matcher(cleanMessage).find();
+
+        if (!gameMessages.isEmpty()) {
+            WidgetMessage lastMsg = gameMessages.get(gameMessages.size() - 1);
+            String merged = tryMergeMessages(lastMsg.getMessage(), cleanMessage);
+            if (merged != null) {
+                String mergedStripped = stripTags(merged);
+                int existingCount = 0;
+
+                if (config.collapseGameChat()) {
+                    for (int i = gameMessages.size() - 2; i >= 0; i--) {
+                        WidgetMessage existing = gameMessages.get(i);
+                        if (stripTags(existing.getMessage()).equals(mergedStripped)) {
+                            existingCount = existing.getCount();
+                            gameMessages.remove(i);
+                            break;
+                        }
+                    }
+                }
+
+                WidgetMessage mergedMsg = WidgetMessage.gameMessage(
+                        merged, System.currentTimeMillis(), lastMsg.getType(), lastMsg.isBossKc());
+                for (int i = 0; i < existingCount; i++) {
+                    mergedMsg.incrementCount();
+                }
+                gameMessages.set(gameMessages.size() - 1, mergedMsg);
+                return;
+            }
+        }
+
         String currentStripped = stripTags(cleanMessage);
         int existingCount = 0;
 
@@ -270,15 +308,6 @@ public class ChatWidgetPlugin extends Plugin {
             }
         }
 
-        if (!gameMessages.isEmpty()) {
-            WidgetMessage lastMsg = gameMessages.get(gameMessages.size() - 1);
-            String merged = tryMergeMessages(lastMsg.getMessage(), cleanMessage);
-            if (merged != null) {
-                gameMessages.set(gameMessages.size() - 1, lastMsg.withMessage(merged));
-                return;
-            }
-        }
-
         WidgetMessage newMsg = WidgetMessage.gameMessage(
                 cleanMessage, System.currentTimeMillis(), event.getType(), isBossKc);
         for (int i = 0; i < existingCount; i++) {
@@ -286,7 +315,7 @@ public class ChatWidgetPlugin extends Plugin {
         }
         gameMessages.add(newMsg);
 
-        while (gameMessages.size() > config.gameMaxMessages() * 2) {
+        while (gameMessages.size() > 50) {
             gameMessages.remove(0);
         }
     }
@@ -325,7 +354,7 @@ public class ChatWidgetPlugin extends Plugin {
         privateMessages.add(WidgetMessage.privateMessage(
                 sender, message.trim(), System.currentTimeMillis(), isOutgoing));
 
-        while (privateMessages.size() > config.privateMaxMessages() * 2) {
+        while (privateMessages.size() > 50) {
             privateMessages.remove(0);
         }
     }
@@ -406,8 +435,9 @@ public class ChatWidgetPlugin extends Plugin {
         boolean gameFilterEnabled = isGameFilterEnabled();
         boolean bossKcFilterEnabled = isBossKcFilterEnabled();
 
-        List<WidgetMessage> filtered = new ArrayList<>(Math.min(size, config.gameMaxMessages()));
-        for (int i = 0; i < size; i++) {
+        int maxMessages = config.gameMaxMessages();
+        List<WidgetMessage> filtered = new ArrayList<>(maxMessages);
+        for (int i = size - 1; i >= 0 && filtered.size() < maxMessages; i--) {
             WidgetMessage msg = gameMessages.get(i);
 
             if (fadeOutThreshold > 0 && currentTime - msg.getTimestamp() >= fadeOutThreshold) {
@@ -422,7 +452,7 @@ public class ChatWidgetPlugin extends Plugin {
                 continue;
             }
 
-            filtered.add(msg);
+            filtered.add(0, msg);
         }
 
         return filtered;
@@ -438,8 +468,10 @@ public class ChatWidgetPlugin extends Plugin {
         int fadeOutDuration = config.privateFadeOutDuration();
         long defaultFadeOutThreshold = fadeOutDuration > 0 ? (fadeOutDuration * 2000L) + 2000 : 0;
 
-        List<WidgetMessage> filtered = new ArrayList<>(Math.min(size, config.privateMaxMessages()));
-        for (int i = 0; i < size; i++) {
+        int maxMessages = config.privateMaxMessages();
+        List<WidgetMessage> filtered = new ArrayList<>(maxMessages);
+        int pmCount = 0;
+        for (int i = size - 1; i >= 0; i--) {
             WidgetMessage msg = privateMessages.get(i);
 
             int msgMaxFade = msg.getMaxFadeSeconds();
@@ -454,7 +486,15 @@ public class ChatWidgetPlugin extends Plugin {
                 continue;
             }
 
-            filtered.add(msg);
+            boolean isLoginNotification = msg.getType() == ChatMessageType.LOGINLOGOUTNOTIFICATION;
+            if (!isLoginNotification && pmCount >= maxMessages) {
+                continue;
+            }
+
+            filtered.add(0, msg);
+            if (!isLoginNotification) {
+                pmCount++;
+            }
         }
 
         return filtered;
@@ -469,6 +509,7 @@ public class ChatWidgetPlugin extends Plugin {
     }
 
     private void hidePmWidgets() {
+        //hide all regardless idk if this will hide something unintentionally?
         hideGameframePmContainer(InterfaceID.TOPLEVEL, 36);
         hideGameframePmContainer(InterfaceID.TOPLEVEL_OSRS_STRETCH, 93);
         hideGameframePmContainer(InterfaceID.TOPLEVEL_PRE_EOC, 90);

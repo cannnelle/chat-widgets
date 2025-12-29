@@ -72,7 +72,7 @@ public class PrivateChatOverlay extends Overlay {
         int widgetWidth = (preferredSize != null && preferredSize.width > 0)
                 ? preferredSize.width
                 : config.privateWidgetWidth();
-        int lineHeight = metrics.getHeight() - (fontSize == FontSize.SMALL ? 2 : 3) + 1;
+        int lineHeight = metrics.getHeight() - 2;
         long currentTime = System.currentTimeMillis();
         int fadeOutDuration = config.privateFadeOutDuration();
         long fadeOutMs = fadeOutDuration * 1000L;

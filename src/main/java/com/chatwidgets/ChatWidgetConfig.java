@@ -142,19 +142,13 @@ public interface ChatWidgetConfig extends Config {
         return false;
     }
 
-    @ConfigItem(keyName = "gamePlayerOffset", name = "Player Offset", description = "Vertical offset when positioned relative to player (-50 to 50)", section = gameAdvancedSection, position = 4)
-    @Range(min = -50, max = 50)
-    default int gamePlayerOffset() {
-        return 0;
-    }
-
     @ConfigItem(keyName = "gameFadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", section = gameAdvancedSection, position = 5)
     @Range(min = 0, max = 300)
     default int gameFadeOutDuration() {
         return 0;
     }
 
-    @ConfigItem(keyName = "gameWidgetWidth", name = "Widget Width", description = "Width of the widget in pixels", section = gameAdvancedSection, position = 6)
+    @ConfigItem(keyName = "gameWidgetWidth", name = "Widget Width", description = "Width of the widget in pixels. Overridden if the widget is manually resized.", section = gameAdvancedSection, position = 6)
     @Range(min = 150, max = 1024)
     default int gameWidgetWidth() {
         return 512;
@@ -184,7 +178,7 @@ public interface ChatWidgetConfig extends Config {
         return 0;
     }
 
-    @ConfigItem(keyName = "privateWidgetWidth", name = "Widget Width", description = "Width of the widget (only when not merged)", section = privateAdvancedSection, position = 2)
+    @ConfigItem(keyName = "privateWidgetWidth", name = "Widget Width", description = "Width of the widget (only when not merged). Overridden if the widget is manually resized.", section = privateAdvancedSection, position = 2)
     @Range(min = 150, max = 1024)
     default int privateWidgetWidth() {
         return 512;
