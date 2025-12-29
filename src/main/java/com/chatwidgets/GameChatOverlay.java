@@ -74,6 +74,10 @@ public class GameChatOverlay extends Overlay {
             return null;
         }
 
+        if (config.showGameMessageWhenHovered() && !plugin.isHoveringGameChatControls()) {
+            return null;
+        }
+
         if (config.swapStackingOrder()) {
             setPriority(9f);
         } else {
