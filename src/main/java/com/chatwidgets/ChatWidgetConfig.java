@@ -166,6 +166,11 @@ public interface ChatWidgetConfig extends Config {
         return 0;
     }
 
+    @ConfigItem(keyName = "showGameMessagesWhenHovered", name = "Show On Hover", description = "Displays the chat messages when hovering over the 'game' chat tab.", section = gameAdvancedSection, position = 9)
+    default boolean showGameMessageWhenHovered() {
+        return false;
+    }
+
     // Private Messages Advanced Section
     @ConfigItem(keyName = "privateDynamicHeight", name = "Dynamic Height", description = "Widget height adjusts to message count (only when not merged)", section = privateAdvancedSection, position = 0)
     default boolean privateDynamicHeight() {

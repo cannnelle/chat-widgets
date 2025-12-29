@@ -4,6 +4,7 @@ import com.google.inject.Provides;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.Point;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.MenuOptionClicked;
@@ -564,5 +565,45 @@ public class ChatWidgetPlugin extends Plugin {
     @Provides
     ChatWidgetConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(ChatWidgetConfig.class);
+    }
+
+    /**
+     * Validates whether any of the chat control widgets which display game messages is being
+     * hovered. Currently, this yields true for the following widgets:
+     * <ul>
+     *     <li>CHAT_ALL</li>
+     *     <li>CHAT_GAME</li>
+     *     <li>CHAT_PUBLIC</li>
+     * </ul>
+     *
+     * @return <i>true</i> if any of the aforementioned widgets are being hovered otherwise returns <i>false</i>.
+     */
+    boolean isHoveringGameChatControls() {
+        final Point mouse = client.getMouseCanvasPosition();
+        return isHoveringWidget(mouse, client.getWidget(InterfaceID.Chatbox.CHAT_ALL)) ||
+                isHoveringWidget(mouse, client.getWidget(InterfaceID.Chatbox.CHAT_GAME)) ||
+                isHoveringWidget(mouse, client.getWidget(InterfaceID.Chatbox.CHAT_PUBLIC));
+    }
+
+    /**
+     * Helper function to determine if the target {@link Widget} passed in is being hovered.
+     *
+     * @param mouse  The current coordinates of the mouse within the game canvas.
+     * @param target The widget
+     * @return <i>true</i> if the mouse coordinates falls within the targeted widget boundary otherwise returns
+     * <i>false</i>.
+     */
+    boolean isHoveringWidget(Point mouse, Widget target) {
+        if (target == null || target.isHidden()) {
+            return false;
+        }
+
+        final Point origin = target.getCanvasLocation();
+        final int mouseX = mouse.getX();
+        final int mouseY = mouse.getY();
+        return mouseX >= origin.getX()
+                && mouseX <= (origin.getX() + target.getWidth())
+                && mouseY >= origin.getY()
+                && mouseY <= (origin.getY() + target.getHeight());
     }
 }
