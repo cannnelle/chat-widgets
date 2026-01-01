@@ -20,6 +20,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
@@ -393,23 +394,37 @@ public class ChatWidgetPlugin extends Plugin {
         if (client.getGameState() != GameState.LOGGED_IN) {
             return false;
         }
-        if (!client.isResized()) {
-            return false;
-        }
         return isChatboxHidden();
+    }
+
+
+    public boolean isChatboxHidden() {
+        return isChatboxMinimized() || isChatboxWidgetHidden();
+    }
+
+    /**
+     * Checks if the user manually minimized their chatbox by clicking on the active tab underneath the chatbox.<br>
+     * Use {@link ChatWidgetPlugin#isChatboxHidden()}.
+     */
+    private boolean isChatboxMinimized() {
+        return client.getVarcIntValue(VarClientID.CHAT_VIEW) == 1337;
+    }
+
+    /**
+     * Checks if the chatbox widget itself is hidden from the game interface.
+     * Use {@link ChatWidgetPlugin#isChatboxHidden()}.
+     */
+    private boolean isChatboxWidgetHidden() {
+        Widget chatboxWidget = client.getWidget(InterfaceID.Chatbox.CHATAREA);
+        return (chatboxWidget != null && chatboxWidget.isHidden());
     }
 
     public boolean shouldShowPrivateOverlay() {
         return config.enablePrivateMessages();
     }
 
-    public boolean isChatboxHidden() {
-        return client.getVarcIntValue(VarClientID.CHAT_VIEW) == 1337;
-    }
-
     public boolean isWidgetsMerged() {
-        return client.isResized()
-                && isChatboxHidden()
+        return ((client.isResized() && isChatboxMinimized()) || !client.isResized() && isChatboxWidgetHidden())
                 && config.mergeWithGameWidget()
                 && config.enableGameMessages()
                 && config.enablePrivateMessages()

@@ -142,33 +142,31 @@ public interface ChatWidgetConfig extends Config {
         return false;
     }
 
-    @ConfigItem(keyName = "gameFadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", section = gameAdvancedSection, position = 5)
+    @ConfigItem(keyName = "showGameMessagesWhenHovered", name = "Display on Tab Hover", description = "Hides game messages unless hovering over over the 'All', 'Game' or 'Public' chat tabs", section = gameAdvancedSection, position = 5)
+    default boolean showGameMessageWhenHovered() {
+        return false;
+    }
+
+    @ConfigItem(keyName = "gameFadeOutDuration", name = "Fade Out Duration", description = "Seconds before messages start fading (0 = never fade)", section = gameAdvancedSection, position = 6)
     @Range(min = 0, max = 300)
     default int gameFadeOutDuration() {
         return 0;
     }
 
-    @ConfigItem(keyName = "gameWidgetWidth", name = "Widget Width", description = "Width of the widget in pixels. Overridden if the widget is manually resized.", section = gameAdvancedSection, position = 6)
+    @ConfigItem(keyName = "gameWidgetWidth", name = "Widget Width", description = "Width of the widget in pixels. Overridden if the widget is manually resized.", section = gameAdvancedSection, position = 77)
     @Range(min = 150, max = 1024)
     default int gameWidgetWidth() {
         return 512;
     }
 
-    @ConfigItem(keyName = "gameMarginTop", name = "Margin Top", description = "Extra space above the widget", section = gameAdvancedSection, position = 7)
+    @ConfigItem(keyName = "gameMarginTop", name = "Margin Top", description = "Extra space above the widget", section = gameAdvancedSection, position = 8)
     @Range(min = 0, max = 200)
-    default int gameMarginTop() {
-        return 0;
-    }
+    default int gameMarginTop() { return 0; }
 
-    @ConfigItem(keyName = "gameMarginBottom", name = "Margin Bottom", description = "Extra space below the widget", section = gameAdvancedSection, position = 8)
+    @ConfigItem(keyName = "gameMarginBottom", name = "Margin Bottom", description = "Extra space below the widget", section = gameAdvancedSection, position = 9)
     @Range(min = 0, max = 200)
     default int gameMarginBottom() {
         return 0;
-    }
-
-    @ConfigItem(keyName = "showGameMessagesWhenHovered", name = "Show On Hover", description = "Displays the chat messages when hovering over the 'game' chat tab.", section = gameAdvancedSection, position = 9)
-    default boolean showGameMessageWhenHovered() {
-        return false;
     }
 
     // Private Messages Advanced Section
